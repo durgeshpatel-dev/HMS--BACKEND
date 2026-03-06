@@ -28,11 +28,13 @@ export const createMenuItemSchema = z.object({
     name: z.string().min(2, 'Item name must be at least 2 characters'),
     description: z.string().optional(),
     price: z.number().positive('Price must be greater than 0'),
-    image: z.string().url().optional().or(z.literal('')),
-    preparationTime: z.number().int().min(0).optional(),
-    isVeg: z.boolean().optional(),
+    imageUrl: z.string().url().optional().or(z.literal('')),
+    image: z.string().url().optional().or(z.literal('')), // backward compatibility
+    customizations: z.any().optional(),
+    preparationTime: z.number().int().min(0).optional(), // ignored for now
+    isVeg: z.boolean().optional(), // ignored for now
     isAvailable: z.boolean().optional(),
-    displayOrder: z.number().int().min(0).optional(),
+    displayOrder: z.number().int().min(0).optional(), // ignored for now
   }),
 });
 
@@ -45,11 +47,13 @@ export const updateMenuItemSchema = z.object({
     name: z.string().min(2).optional(),
     description: z.string().optional(),
     price: z.number().positive().optional(),
-    image: z.string().url().optional().or(z.literal('')),
-    preparationTime: z.number().int().min(0).optional(),
-    isVeg: z.boolean().optional(),
+    imageUrl: z.string().url().optional().or(z.literal('')),
+    image: z.string().url().optional().or(z.literal('')), // backward compatibility
+    customizations: z.any().optional(),
+    preparationTime: z.number().int().min(0).optional(), // ignored for now
+    isVeg: z.boolean().optional(), // ignored for now
     isAvailable: z.boolean().optional(),
-    displayOrder: z.number().int().min(0).optional(),
+    displayOrder: z.number().int().min(0).optional(), // ignored for now
   }),
 });
 

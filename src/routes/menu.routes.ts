@@ -56,7 +56,7 @@ router.delete(
   menuController.deleteMenuItem
 );
 router.patch(
-  '/items/:id/toggle-availability',
+  '/items/:id/availability',
   requireRole(['manager']),
   menuController.toggleMenuItemAvailability
 );

@@ -16,7 +16,7 @@ export const updateTableSchema = z.object({
   body: z.object({
     tableNumber: z.string().min(1).optional(),
     capacity: z.number().int().min(1).optional(),
-    status: z.enum(['available', 'occupied', 'reserved', 'cleaning']).optional(),
+    status: z.enum(['available', 'occupied', 'reserved', 'billing', 'cleaning']).optional(),
     location: z.string().optional(),
     qrCode: z.string().optional(),
   }),
@@ -27,7 +27,7 @@ export const updateTableStatusSchema = z.object({
     id: z.string().regex(/^\d+$/, 'Invalid table ID'),
   }),
   body: z.object({
-    status: z.enum(['available', 'occupied', 'reserved', 'cleaning']),
+    status: z.enum(['available', 'occupied', 'reserved', 'billing', 'cleaning']),
   }),
 });
 
