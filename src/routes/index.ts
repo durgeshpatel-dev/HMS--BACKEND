@@ -5,6 +5,7 @@ import tableRoutes from './table.routes';
 import orderRoutes from './order.routes';
 import managerRoutes from './manager.routes';
 import billRoutes from './bill.routes';
+import settingsRoutes from './settings.routes';
 
 const router = Router();
 
@@ -24,5 +25,6 @@ router.use('/tables', tableRoutes);
 router.use('/orders', orderRoutes);
 router.use('/manager', managerRoutes);
 router.use('/bills', billRoutes);
+router.use('/settings', settingsRoutes);
 
 export default router;

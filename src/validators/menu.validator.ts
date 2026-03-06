@@ -31,10 +31,11 @@ export const createMenuItemSchema = z.object({
     imageUrl: z.string().url().optional().or(z.literal('')),
     image: z.string().url().optional().or(z.literal('')), // backward compatibility
     customizations: z.any().optional(),
-    preparationTime: z.number().int().min(0).optional(), // ignored for now
-    isVeg: z.boolean().optional(), // ignored for now
+    preparationTime: z.number().int().min(0).optional(),
+    isVegetarian: z.boolean().optional(),
+    isVeg: z.boolean().optional(), // backward compatibility
     isAvailable: z.boolean().optional(),
-    displayOrder: z.number().int().min(0).optional(), // ignored for now
+    displayOrder: z.number().int().min(0).optional(), // accepted but not persisted
   }),
 });
 
@@ -50,10 +51,11 @@ export const updateMenuItemSchema = z.object({
     imageUrl: z.string().url().optional().or(z.literal('')),
     image: z.string().url().optional().or(z.literal('')), // backward compatibility
     customizations: z.any().optional(),
-    preparationTime: z.number().int().min(0).optional(), // ignored for now
-    isVeg: z.boolean().optional(), // ignored for now
+    preparationTime: z.number().int().min(0).optional(),
+    isVegetarian: z.boolean().optional(),
+    isVeg: z.boolean().optional(), // backward compatibility
     isAvailable: z.boolean().optional(),
-    displayOrder: z.number().int().min(0).optional(), // ignored for now
+    displayOrder: z.number().int().min(0).optional(), // accepted but not persisted
   }),
 });
 

@@ -1,7 +1,43 @@
 import prisma from '../config/database';
 import type { CreateCategoryInput, UpdateCategoryInput, CreateMenuItemInput, UpdateMenuItemInput } from '../validators/menu.validator';
+import { Prisma } from '@prisma/client';
 
 class MenuService {
+  private buildCreateMenuItemData(data: CreateMenuItemInput, restaurantId: number): Prisma.MenuItemUncheckedCreateInput {
+    const imageUrl = data.imageUrl ?? data.image;
+    const isVegetarian = data.isVegetarian ?? data.isVeg;
+
+    return {
+      restaurantId,
+      categoryId: data.categoryId,
+      name: data.name,
+      description: data.description ?? null,
+      price: data.price,
+      imageUrl: imageUrl || null,
+      ...(data.preparationTime !== undefined ? { preparationTime: data.preparationTime } : {}),
+      ...(isVegetarian !== undefined ? { isVegetarian } : {}),
+      isAvailable: data.isAvailable ?? true,
+      ...(data.customizations !== undefined ? { customizations: data.customizations } : {}),
+    };
+  }
+
+  private buildUpdateMenuItemData(data: UpdateMenuItemInput): Prisma.MenuItemUncheckedUpdateInput {
+    const imageUrl = data.imageUrl ?? data.image;
+    const isVegetarian = data.isVegetarian ?? data.isVeg;
+
+    return {
+      ...(data.categoryId !== undefined ? { categoryId: data.categoryId } : {}),
+      ...(data.name !== undefined ? { name: data.name } : {}),
+      ...(data.description !== undefined ? { description: data.description } : {}),
+      ...(data.price !== undefined ? { price: data.price } : {}),
+      ...(imageUrl !== undefined ? { imageUrl: imageUrl || null } : {}),
+      ...(data.preparationTime !== undefined ? { preparationTime: data.preparationTime } : {}),
+      ...(isVegetarian !== undefined ? { isVegetarian } : {}),
+      ...(data.isAvailable !== undefined ? { isAvailable: data.isAvailable } : {}),
+      ...(data.customizations !== undefined ? { customizations: data.customizations } : {}),
+    };
+  }
+
   // ========== Category Methods ==========
   
   async getAllCategories(restaurantId: number) {
@@ -142,10 +178,7 @@ class MenuService {
     }
 
     return await prisma.menuItem.create({
-      data: {
-        ...data,
-        restaurantId,
-      },
+      data: this.buildCreateMenuItemData(data, restaurantId),
       include: {
         category: true,
       },
@@ -180,7 +213,7 @@ class MenuService {
 
     return await prisma.menuItem.update({
       where: { id },
-      data,
+      data: this.buildUpdateMenuItemData(data),
       include: {
         category: true,
       },

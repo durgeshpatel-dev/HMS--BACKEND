@@ -107,6 +107,8 @@ model MenuItem {
   description     String?  @db.Text
   price           Decimal  @db.Decimal(10, 2)
   imageUrl        String?  @map("image_url") @db.Text
+  preparationTime Int?     @map("preparation_time")
+  isVegetarian    Boolean  @default(false) @map("is_vegetarian")
   isAvailable     Boolean  @default(true) @map("is_available")
   customizations  Json     @default("[]") // [{"name": "Spice Level", "options": ["Mild", "Medium", "Spicy"]}]
   createdAt       DateTime @default(now()) @map("created_at")
