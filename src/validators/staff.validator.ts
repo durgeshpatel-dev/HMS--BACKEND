@@ -6,7 +6,7 @@ const phoneSchema = z
 
 export const getStaffSchema = z.object({
   query: z.object({
-    role: z.enum(['waiter', 'cook', 'cashier']).optional(),
+    role: z.enum(['waiter', 'cook']).optional(),
   }),
 });
 
@@ -15,7 +15,7 @@ export const createStaffSchema = z.object({
     name: z.string().min(2, 'Name must be at least 2 characters'),
     phone: phoneSchema,
     pin: z.string().regex(/^\d{4,6}$/, 'PIN must be 4-6 digits'),
-    role: z.enum(['waiter', 'cook', 'cashier']),
+    role: z.enum(['waiter', 'cook']),
     isActive: z.boolean().optional(),
   }),
 });
@@ -27,7 +27,7 @@ export const updateStaffSchema = z.object({
   body: z.object({
     name: z.string().min(2).optional(),
     pin: z.string().regex(/^\d{4,6}$/).optional(),
-    role: z.enum(['waiter', 'cook', 'cashier']).optional(),
+    role: z.enum(['waiter', 'cook']).optional(),
     isActive: z.boolean().optional(),
   }),
 });

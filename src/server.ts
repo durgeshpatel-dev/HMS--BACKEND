@@ -31,6 +31,21 @@ const startServer = async () => {
       `);
     });
 
+    // Initialize Socket.io
+    const { initSocket } = require('./config/socket');
+    const io = initSocket(server);
+
+    // Additional event listeners for app specific logic
+    io.on('connection', (socket: any) => {
+      socket.on('join:room', (data: { userId: string, role: string }) => {
+        socket.join(`role:${data.role}`);
+        console.log(`User ${data.userId} with role ${data.role} joined room role:${data.role}`);
+      });
+    });
+
+    // Attach io to app to be used in controllers
+    app.set('io', io);
+
     // Graceful shutdown
     process.on('SIGTERM', async () => {
       console.log('SIGTERM signal received: closing HTTP server');

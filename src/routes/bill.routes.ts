@@ -20,14 +20,14 @@ router.get('/:id', validate(getBillSchema), billController.getBillById);
 
 router.post(
   '/order/:orderId/generate',
-  requireRole(['manager', 'waiter', 'cashier']),
+  requireRole(['manager', 'waiter']),
   validate(generateBillSchema),
   billController.generateBill
 );
 
 router.post(
   '/:id/payment',
-  requireRole(['manager', 'waiter', 'cashier']),
+  requireRole(['manager', 'waiter']),
   validate(recordPaymentSchema),
   billController.recordPayment
 );

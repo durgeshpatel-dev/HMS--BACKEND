@@ -21,7 +21,7 @@ router.get('/:id', orderController.getOrderById);
 
 router.post(
   '/',
-  requireRole(['waiter']),
+  requireRole(['waiter', 'manager']),
   validate(createOrderSchema),
   orderController.createOrder
 );

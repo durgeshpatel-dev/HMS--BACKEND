@@ -104,22 +104,10 @@ async function main() {
     },
   });
 
-  const cashier = await prisma.staff.create({
-    data: {
-      restaurantId: restaurant.id,
-      name: 'Neha Gupta',
-      phone: '9876543214',
-      pinHash: await hashPin('9999'),
-      role: 'cashier',
-      isActive: true,
-    },
-  });
-
   console.log(`✅ Created staff members:`);
   console.log(`   - ${waiter1.name} (Waiter, Phone: ${waiter1.phone}, PIN: 1234)`);
   console.log(`   - ${waiter2.name} (Waiter, Phone: ${waiter2.phone}, PIN: 1234)`);
-  console.log(`   - ${cook1.name} (Cook, Phone: ${cook1.phone}, PIN: 5678)`);
-  console.log(`   - ${cashier.name} (Cashier, Phone: ${cashier.phone}, PIN: 9999)\n`);
+  console.log(`   - ${cook1.name} (Cook, Phone: ${cook1.phone}, PIN: 5678)\n`);
 
   // Create Menu Categories
   const categories = await Promise.all([
@@ -433,7 +421,6 @@ async function main() {
   console.log(`   Waiter 1: ${waiter1.phone} / PIN: 1234`);
   console.log(`   Waiter 2: ${waiter2.phone} / PIN: 1234`);
   console.log(`   Cook: ${cook1.phone} / PIN: 5678`);
-  console.log(`   Cashier: ${cashier.phone} / PIN: 9999`);
   console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 }
 

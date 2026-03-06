@@ -64,7 +64,7 @@ model Staff {
   name         String   @db.VarChar(255)
   phone        String   @unique @db.VarChar(20)
   pinHash      String   @map("pin_hash") @db.VarChar(255)
-  role         String   @db.VarChar(50) // 'waiter', 'cook', 'cashier'
+  role         String   @db.VarChar(50) // 'waiter', 'cook'
   isActive     Boolean  @default(true) @map("is_active")
   lastLogin    DateTime? @map("last_login")
   createdAt    DateTime @default(now()) @map("created_at")
