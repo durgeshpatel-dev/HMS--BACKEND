@@ -1,0 +1,91 @@
+import { Request, Response, NextFunction } from 'express';
+import { tableService } from "../services/table.service";
+import { sendSuccess, sendError } from '../utils/response.util';
+
+export class TableController {
+  async getAllTables(req: Request, res: Response, next: NextFunction) {
+    try {
+      const user = (req as any).user;
+      const tables = await tableService.getAllTables(user.restaurantId);
+      return sendSuccess(res, tables, 'Tables retrieved successfully');
+    } catch (error: any) {
+      return sendError(res, error.message);
+    }
+  }
+
+  async getTableById(req: Request, res: Response, next: NextFunction) {
+    try {
+      const user = (req as any).user;
+      const id = parseInt(req.params.id as string);
+      const table = await tableService.getTableById(id, user.restaurantId);
+      return sendSuccess(res, table, 'Table retrieved successfully');
+    } catch (error: any) {
+      return sendError(res, error.message, error.message === 'Table not found' ? 404 : 500);
+    }
+  }
+
+  async createTable(req: Request, res: Response, next: NextFunction) {
+    try {
+      const user = (req as any).user;
+      const table = await tableService.createTable(req.body, user.restaurantId);
+      return sendSuccess(res, table, 'Table created successfully', 201);
+    } catch (error: any) {
+      return sendError(res, error.message, 400);
+    }
+  }
+
+  async updateTable(req: Request, res: Response, next: NextFunction) {
+    try {
+      const user = (req as any).user;
+      const id = parseInt(req.params.id as string);
+      const table = await tableService.updateTable(id, req.body, user.restaurantId);
+      return sendSuccess(res, table, 'Table updated successfully');
+    } catch (error: any) {
+      return sendError(res, error.message, error.message === 'Table not found' ? 404 : 400);
+    }
+  }
+
+  async updateTableStatus(req: Request, res: Response, next: NextFunction) {
+    try {
+      const user = (req as any).user;
+      const id = parseInt(req.params.id as string);
+      const table = await tableService.updateTableStatus(id, req.body, user.restaurantId);
+      return sendSuccess(res, table, 'Table status updated successfully');
+    } catch (error: any) {
+      return sendError(res, error.message, error.message === 'Table not found' ? 404 : 400);
+    }
+  }
+
+  async deleteTable(req: Request, res: Response, next: NextFunction) {
+    try {
+      const user = (req as any).user;
+      const id = parseInt(req.params.id as string);
+      await tableService.deleteTable(id, user.restaurantId);
+      return sendSuccess(res, null, 'Table deleted successfully');
+    } catch (error: any) {
+      return sendError(res, error.message, error.message === 'Table not found' ? 404 : 400);
+    }
+  }
+
+  async getAvailableTables(req: Request, res: Response, next: NextFunction) {
+    try {
+      const user = (req as any).user;
+      const tables = await tableService.getAvailableTables(user.restaurantId);
+      return sendSuccess(res, tables, 'Available tables retrieved successfully');
+    } catch (error: any) {
+      return sendError(res, error.message);
+    }
+  }
+
+  async getTableStats(req: Request, res: Response, next: NextFunction) {
+    try {
+      const user = (req as any).user;
+      const stats = await tableService.getTableStats(user.restaurantId);
+      return sendSuccess(res, stats, 'Table statistics retrieved successfully');
+    } catch (error: any) {
+      return sendError(res, error.message);
+    }
+  }
+}
+
+export default new TableController();

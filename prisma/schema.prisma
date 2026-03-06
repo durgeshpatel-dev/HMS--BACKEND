@@ -1,0 +1,250 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Restaurant table
+model Restaurant {
+  id         Int      @id @default(autoincrement())
+  name       String   @db.VarChar(255)
+  email      String   @unique @db.VarChar(255)
+  phone      String   @db.VarChar(20)
+  address    String?  @db.Text
+  settings   Json     @default("{\"currency\":\"INR\",\"tax_percentage\":5,\"operating_hours\":{},\"features\":{\"table_service\":true,\"parcel_orders\":true,\"online_orders\":false}}")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  users      User[]
+  staff      Staff[]
+  categories Category[]
+  menuItems  MenuItem[]
+  tables     Table[]
+  orders     Order[]
+  orderItems OrderItem[]
+  bills      Bill[]
+  payments   Payment[]
+
+  @@map("restaurants")
+}
+
+// Users table (Managers/Admins)
+model User {
+  id            Int      @id @default(autoincrement())
+  restaurantId  Int      @map("restaurant_id")
+  email         String   @unique @db.VarChar(255)
+  passwordHash  String   @map("password_hash") @db.VarChar(255)
+  name          String   @db.VarChar(255)
+  phone         String?  @db.VarChar(20)
+  role          String   @default("manager") @db.VarChar(50) // 'super_admin', 'manager'
+  status        String   @default("pending_approval") @db.VarChar(50) // 'pending_approval', 'active', 'rejected', 'suspended'
+  lastLogin     DateTime? @map("last_login")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  restaurant    Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@index([restaurantId])
+  @@map("users")
+}
+
+// Staff table (Waiters, Cooks)
+model Staff {
+  id           Int      @id @default(autoincrement())
+  restaurantId Int      @map("restaurant_id")
+  name         String   @db.VarChar(255)
+  phone        String   @unique @db.VarChar(20)
+  pinHash      String   @map("pin_hash") @db.VarChar(255)
+  role         String   @db.VarChar(50) // 'waiter', 'cook', 'cashier'
+  isActive     Boolean  @default(true) @map("is_active")
+  lastLogin    DateTime? @map("last_login")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  orders       Order[]
+
+  @@index([phone])
+  @@index([restaurantId])
+  @@map("staff")
+}
+
+// Categories table
+model Category {
+  id           Int      @id @default(autoincrement())
+  restaurantId Int      @map("restaurant_id")
+  name         String   @db.VarChar(255)
+  description  String?  @db.Text
+  displayOrder Int      @default(0) @map("display_order")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  menuItems    MenuItem[]
+
+  @@index([restaurantId])
+  @@map("categories")
+}
+
+// Menu Items table
+model MenuItem {
+  id              Int      @id @default(autoincrement())
+  restaurantId    Int      @map("restaurant_id")
+  categoryId      Int?     @map("category_id")
+  name            String   @db.VarChar(255)
+  description     String?  @db.Text
+  price           Decimal  @db.Decimal(10, 2)
+  imageUrl        String?  @map("image_url") @db.Text
+  isAvailable     Boolean  @default(true) @map("is_available")
+  customizations  Json     @default("[]") // [{"name": "Spice Level", "options": ["Mild", "Medium", "Spicy"]}]
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  restaurant      Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  category        Category?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  orderItems      OrderItem[]
+
+  @@index([restaurantId])
+  @@index([categoryId])
+  @@map("menu_items")
+}
+
+// Tables table
+model Table {
+  id             Int      @id @default(autoincrement())
+  restaurantId   Int      @map("restaurant_id")
+  tableNumber    String   @map("table_number") @db.VarChar(50)
+  capacity       Int      @default(4)
+  location       String?  @db.VarChar(100) // 'Indoor', 'Outdoor', 'VIP'
+  status         String   @default("available") @db.VarChar(50) // 'available', 'occupied', 'reserved', 'billing', 'cleaning'
+  currentOrderId Int?     @unique @map("current_order_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  restaurant     Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  currentOrder   Order?     @relation("CurrentOrder", fields: [currentOrderId], references: [id], onDelete: SetNull)
+  orders         Order[]    @relation("TableOrders")
+
+  @@unique([restaurantId, tableNumber])
+  @@index([restaurantId])
+  @@index([status])
+  @@map("tables")
+}
+
+// Orders table
+model Order {
+  id             Int      @id @default(autoincrement())
+  restaurantId   Int      @map("restaurant_id")
+  tableId        Int?     @map("table_id")
+  orderNumber    String   @unique @map("order_number") @db.VarChar(50)
+  orderType      String   @map("order_type") @db.VarChar(50) // 'dine_in', 'parcel'
+  status         String   @default("pending") @db.VarChar(50) // 'pending', 'confirmed', 'preparing', 'ready', 'served', 'billing', 'completed', 'cancelled'
+  kitchenStatus  String   @default("pending") @map("kitchen_status") @db.VarChar(50) // 'pending', 'preparing', 'ready'
+  customerName   String?  @map("customer_name") @db.VarChar(255)
+  customerPhone  String?  @map("customer_phone") @db.VarChar(20)
+  waiterId       Int?     @map("waiter_id")
+  subtotal       Decimal  @default(0) @db.Decimal(10, 2)
+  taxAmount      Decimal  @default(0) @map("tax_amount") @db.Decimal(10, 2)
+  discountAmount Decimal  @default(0) @map("discount_amount") @db.Decimal(10, 2)
+  totalAmount    Decimal  @default(0) @map("total_amount") @db.Decimal(10, 2)
+  specialNotes   String?  @map("special_notes") @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  completedAt    DateTime? @map("completed_at")
+
+  // Relations
+  restaurant     Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  table          Table?      @relation("TableOrders", fields: [tableId], references: [id], onDelete: SetNull)
+  waiter         Staff?      @relation(fields: [waiterId], references: [id], onDelete: SetNull)
+  currentTable   Table?      @relation("CurrentOrder")
+  items          OrderItem[]
+  bill           Bill?
+
+  @@index([restaurantId])
+  @@index([tableId])
+  @@index([status])
+  @@index([orderNumber])
+  @@index([createdAt(sort: Desc)])
+  @@map("orders")
+}
+
+// Order Items table
+model OrderItem {
+  id             Int      @id @default(autoincrement())
+  orderId        Int      @map("order_id")
+  menuItemId     Int      @map("menu_item_id")
+  restaurantId   Int      @map("restaurant_id")
+  quantity       Int      @default(1)
+  unitPrice      Decimal  @map("unit_price") @db.Decimal(10, 2)
+  customizations Json     @default("{}") // {"spice": "medium", "extras": ["cheese", "olives"]}
+  subtotal       Decimal  @db.Decimal(10, 2)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  // Relations
+  order          Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem       MenuItem   @relation(fields: [menuItemId], references: [id], onDelete: Restrict)
+  restaurant     Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([restaurantId])
+  @@map("order_items")
+}
+
+// Bills table
+model Bill {
+  id             Int      @id @default(autoincrement())
+  restaurantId   Int      @map("restaurant_id")
+  orderId        Int      @unique @map("order_id")
+  billNumber     String   @unique @map("bill_number") @db.VarChar(50)
+  subtotal       Decimal  @db.Decimal(10, 2)
+  taxAmount      Decimal  @map("tax_amount") @db.Decimal(10, 2)
+  discountAmount Decimal  @default(0) @map("discount_amount") @db.Decimal(10, 2)
+  totalAmount    Decimal  @map("total_amount") @db.Decimal(10, 2)
+  paymentStatus  String   @default("unpaid") @map("payment_status") @db.VarChar(50) // 'unpaid', 'partial', 'paid'
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  restaurant     Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  order          Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  payments       Payment[]
+
+  @@index([restaurantId])
+  @@index([orderId])
+  @@index([billNumber])
+  @@map("bills")
+}
+
+// Payments table
+model Payment {
+  id            Int      @id @default(autoincrement())
+  restaurantId  Int      @map("restaurant_id")
+  billId        Int      @map("bill_id")
+  amount        Decimal  @db.Decimal(10, 2)
+  paymentMethod String   @map("payment_method") @db.VarChar(50) // 'cash', 'card', 'upi'
+  transactionId String?  @map("transaction_id") @db.VarChar(255)
+  status        String   @default("success") @db.VarChar(50) // 'success', 'failed', 'pending'
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  // Relations
+  restaurant    Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  bill          Bill       @relation(fields: [billId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId])
+  @@index([billId])
+  @@map("payments")
+}
