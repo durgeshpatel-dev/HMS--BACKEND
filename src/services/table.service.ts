@@ -16,7 +16,7 @@ class TableService {
         orders: {
           where: {
             status: {
-              in: ['pending', 'preparing', 'ready'],
+              in: ['pending', 'preparing', 'ready', 'billing'],
             },
           },
           include: {
@@ -26,6 +26,7 @@ class TableService {
               },
             },
           },
+          orderBy: { createdAt: 'asc' },
         },
       },
     });
@@ -34,7 +35,16 @@ class TableService {
       throw new Error('Table not found');
     }
 
-    return table;
+    // Compute consolidated summary across all active orders
+    const pendingBillSummary = {
+      orderCount: table.orders.length,
+      combinedSubtotal: table.orders.reduce((sum, o) => sum + Number(o.subtotal), 0),
+      combinedTaxAmount: table.orders.reduce((sum, o) => sum + Number(o.taxAmount), 0),
+      combinedDiscountAmount: table.orders.reduce((sum, o) => sum + Number(o.discountAmount), 0),
+      combinedTotal: table.orders.reduce((sum, o) => sum + Number(o.totalAmount), 0),
+    };
+
+    return { ...table, pendingBillSummary };
   }
 
   async getTableByNumber(tableNumber: string, restaurantId: number) {

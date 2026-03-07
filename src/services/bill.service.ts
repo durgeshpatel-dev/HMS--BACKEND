@@ -69,20 +69,33 @@ class BillService {
     });
 
     if (!bill) throw new Error('Bill not found');
-    return bill;
+
+    // Include all billing-status sibling orders for the same table
+    const consolidatedOrders = bill.order.tableId
+      ? await prisma.order.findMany({
+          where: {
+            tableId: bill.order.tableId,
+            restaurantId,
+            status: 'billing',
+          },
+          include: {
+            items: { include: { menuItem: true } },
+          },
+          orderBy: { createdAt: 'asc' },
+        })
+      : [bill.order];
+
+    return { ...bill, consolidatedOrders };
   }
 
   async getBillByOrderId(orderId: number, restaurantId: number) {
-    const bill = await prisma.bill.findFirst({
+    // First try to find bill directly by orderId
+    let bill = await prisma.bill.findFirst({
       where: { orderId, restaurantId },
       include: {
         order: {
           include: {
-            items: {
-              include: {
-                menuItem: true,
-              },
-            },
+            items: { include: { menuItem: true } },
             table: true,
           },
         },
@@ -90,8 +103,50 @@ class BillService {
       },
     });
 
+    // If not found, the order may be a sibling consolidated into another order's bill
+    if (!bill) {
+      const order = await prisma.order.findFirst({
+        where: { id: orderId, restaurantId },
+        select: { tableId: true, status: true },
+      });
+
+      if (order?.tableId && order.status === 'billing') {
+        bill = await prisma.bill.findFirst({
+          where: {
+            restaurantId,
+            order: { tableId: order.tableId, status: 'billing' },
+          },
+          include: {
+            order: {
+              include: {
+                items: { include: { menuItem: true } },
+                table: true,
+              },
+            },
+            payments: true,
+          },
+        });
+      }
+    }
+
     if (!bill) throw new Error('Bill not found for this order');
-    return bill;
+
+    // Include all billing-status sibling orders for the same table
+    const consolidatedOrders = bill.order.tableId
+      ? await prisma.order.findMany({
+          where: {
+            tableId: bill.order.tableId,
+            restaurantId,
+            status: 'billing',
+          },
+          include: {
+            items: { include: { menuItem: true } },
+          },
+          orderBy: { createdAt: 'asc' },
+        })
+      : [bill.order];
+
+    return { ...bill, consolidatedOrders };
   }
 
   async generateBill(orderId: number, restaurantId: number, payload?: GenerateBillInput) {
@@ -112,12 +167,43 @@ class BillService {
       throw new Error('Cannot generate bill for an order without items');
     }
 
+    // Find all other unbilled orders for the same table
+    const siblingOrders = order.tableId
+      ? await prisma.order.findMany({
+          where: {
+            tableId: order.tableId,
+            restaurantId,
+            id: { not: order.id },
+            status: { notIn: ['completed', 'cancelled'] },
+            bill: null,
+          },
+          include: { items: true },
+        })
+      : [];
+
+    const allOrders = [order, ...siblingOrders];
+
     const discountAmount = Number(payload?.discountAmount ?? order.discountAmount ?? 0);
-    const subtotal = order.items.reduce((sum, item) => sum + Number(item.subtotal), 0);
+
+    // Calculate combined subtotal from ALL unbilled orders for this table
+    const combinedSubtotal = allOrders.reduce(
+      (total, o) => total + o.items.reduce((sum, item) => sum + Number(item.subtotal), 0),
+      0,
+    );
+
     const taxPercentage = await this.getTaxPercentage(restaurantId);
-    const totals = calculateOrderTotals(subtotal, taxPercentage, discountAmount);
+    const totals = calculateOrderTotals(combinedSubtotal, taxPercentage, discountAmount);
 
     const bill = await prisma.$transaction(async (tx) => {
+      // Mark all sibling unbilled orders as 'billing'
+      if (siblingOrders.length > 0) {
+        await tx.order.updateMany({
+          where: { id: { in: siblingOrders.map((o) => o.id) } },
+          data: { status: 'billing' },
+        });
+      }
+
+      // Update primary order with combined totals and set to billing
       await tx.order.update({
         where: { id: order.id },
         data: {
@@ -152,11 +238,7 @@ class BillService {
             order: {
               include: {
                 table: true,
-                items: {
-                  include: {
-                    menuItem: true,
-                  },
-                },
+                items: { include: { menuItem: true } },
               },
             },
             payments: true,
@@ -179,11 +261,7 @@ class BillService {
           order: {
             include: {
               table: true,
-              items: {
-                include: {
-                  menuItem: true,
-                },
-              },
+              items: { include: { menuItem: true } },
             },
           },
           payments: true,
@@ -191,7 +269,22 @@ class BillService {
       });
     });
 
-    return bill;
+    // Fetch all billing orders for this table to include in response
+    const consolidatedOrders = order.tableId
+      ? await prisma.order.findMany({
+          where: {
+            tableId: order.tableId,
+            restaurantId,
+            status: 'billing',
+          },
+          include: {
+            items: { include: { menuItem: true } },
+          },
+          orderBy: { createdAt: 'asc' },
+        })
+      : allOrders;
+
+    return { ...bill, consolidatedOrders };
   }
 
   async recordPayment(billId: number, restaurantId: number, payload: RecordPaymentInput) {
@@ -250,20 +343,33 @@ class BillService {
       });
 
       if (paymentStatus === 'paid') {
-        await tx.order.update({
-          where: { id: bill.orderId },
-          data: {
-            status: 'completed',
-            completedAt: new Date(),
-          },
-        });
-
         if (bill.order.tableId) {
+          // Mark ALL billing-status orders for this table as completed
+          await tx.order.updateMany({
+            where: {
+              tableId: bill.order.tableId,
+              restaurantId: bill.restaurantId,
+              status: 'billing',
+            },
+            data: {
+              status: 'completed',
+              completedAt: new Date(),
+            },
+          });
+
           await tx.table.update({
             where: { id: bill.order.tableId },
             data: {
               status: 'available',
               currentOrderId: null,
+            },
+          });
+        } else {
+          await tx.order.update({
+            where: { id: bill.orderId },
+            data: {
+              status: 'completed',
+              completedAt: new Date(),
             },
           });
         }
