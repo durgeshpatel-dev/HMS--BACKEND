@@ -10,7 +10,8 @@ class BillService {
     });
 
     const settings = restaurant?.settings as any;
-    const taxPercentage = Number(settings?.tax_percentage ?? 5);
+    // Support both camelCase (taxPercentage) and snake_case (tax_percentage) for backwards compatibility
+    const taxPercentage = Number(settings?.taxPercentage ?? settings?.tax_percentage ?? 5);
     return Number.isFinite(taxPercentage) ? taxPercentage : 5;
   }
 
@@ -183,16 +184,26 @@ class BillService {
 
     const allOrders = [order, ...siblingOrders];
 
-    const discountAmount = Number(payload?.discountAmount ?? order.discountAmount ?? 0);
-
     // Calculate combined subtotal from ALL unbilled orders for this table
     const combinedSubtotal = allOrders.reduce(
       (total, o) => total + o.items.reduce((sum, item) => sum + Number(item.subtotal), 0),
       0,
     );
 
+    const discountPercentage = Number(payload?.discountPercentage ?? 0);
+    const safeDiscountPercentage =
+      Number.isFinite(discountPercentage) && discountPercentage >= 0 && discountPercentage <= 100
+        ? discountPercentage
+        : 0;
+    const discountAmountFromPercent = (combinedSubtotal * safeDiscountPercentage) / 100;
+    const discountAmount =
+      payload?.discountPercentage !== undefined
+        ? discountAmountFromPercent
+        : Number(payload?.discountAmount ?? order.discountAmount ?? 0);
+    const extraCharges = Number(payload?.extraCharges ?? 0);
+
     const taxPercentage = await this.getTaxPercentage(restaurantId);
-    const totals = calculateOrderTotals(combinedSubtotal, taxPercentage, discountAmount);
+    const totals = calculateOrderTotals(combinedSubtotal, taxPercentage, discountAmount, extraCharges);
 
     const bill = await prisma.$transaction(async (tx) => {
       // Mark all sibling unbilled orders as 'billing'
@@ -231,7 +242,9 @@ class BillService {
           data: {
             subtotal: totals.subtotal,
             taxAmount: totals.taxAmount,
+            discountPercentage: safeDiscountPercentage,
             discountAmount: totals.discountAmount,
+            extraCharges: totals.extraCharges,
             totalAmount: totals.totalAmount,
           },
           include: {
@@ -253,7 +266,9 @@ class BillService {
           billNumber: generateBillNumber(),
           subtotal: totals.subtotal,
           taxAmount: totals.taxAmount,
+          discountPercentage: safeDiscountPercentage,
           discountAmount: totals.discountAmount,
+          extraCharges: totals.extraCharges,
           totalAmount: totals.totalAmount,
           paymentStatus: 'unpaid',
         },

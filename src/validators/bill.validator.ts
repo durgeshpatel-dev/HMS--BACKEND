@@ -23,7 +23,9 @@ export const generateBillSchema = z.object({
     orderId: z.string().regex(/^\d+$/, 'Invalid order ID'),
   }),
   body: z.object({
+    discountPercentage: z.number().min(0).max(100).optional(),
     discountAmount: z.number().min(0).optional(),
+    extraCharges: z.number().min(0).optional(),
   }).optional(),
 });
 
@@ -40,5 +42,8 @@ export const recordPaymentSchema = z.object({
 });
 
 export type ListBillsInput = z.infer<typeof listBillsSchema>['query'];
-export type GenerateBillInput = z.infer<typeof generateBillSchema>['body'];
+export type GenerateBillInput = z.infer<typeof generateBillSchema>['body'] & {
+  discountPercentage?: number;
+  extraCharges?: number;
+};
 export type RecordPaymentInput = z.infer<typeof recordPaymentSchema>['body'];

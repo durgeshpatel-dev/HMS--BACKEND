@@ -32,6 +32,7 @@ export const initSocket = (server: HTTPServer): SocketIOServer => {
   io.on('connection', (socket: Socket) => {
     const restaurantId = socket.data.user?.restaurantId;
     const userId = socket.data.user?.userId;
+    const restaurantIdNumber = Number(restaurantId);
 
     // Join restaurant-specific room
     if (restaurantId) {
@@ -42,6 +43,84 @@ export const initSocket = (server: HTTPServer): SocketIOServer => {
       socket.join(`user:${userId}`);
       console.log(`Socket ${socket.id} joined user:${userId}`);
     }
+
+    // Handle incoming order status update from mobile/dashboard
+    socket.on('order:updateStatus', async (data: { orderId: string; status: string }) => {
+      try {
+        const { orderId, status } = data;
+        console.log(`Socket event: order:updateStatus - Order ${orderId} to ${status}`);
+
+        if (!restaurantIdNumber) {
+          throw new Error('Invalid restaurant context');
+        }
+        
+        // Import order service dynamically to avoid circular dependencies
+        const { orderService } = await import('../services/order.service');
+        const updatedOrder = await orderService.updateOrder(
+          Number(orderId),
+          { status },
+          restaurantIdNumber
+        );
+        
+        // Broadcast to all clients in restaurant
+        if (restaurantId) {
+          io.to(`restaurant:${restaurantId}`).emit('order:updated', updatedOrder);
+        }
+        
+        // Acknowledge success back to sender
+        socket.emit('order:updateStatus:success', { orderId, status });
+      } catch (error: any) {
+        console.error('Error updating order status via socket:', error);
+        socket.emit('order:updateStatus:error', { 
+          orderId: data.orderId, 
+          error: error.message 
+        });
+      }
+    });
+
+    // Handle table status update from mobile/dashboard
+    socket.on('table:updateStatus', async (data: { tableId: string; status: string }) => {
+      try {
+        const { tableId, status } = data;
+        console.log(`Socket event: table:updateStatus - Table ${tableId} to ${status}`);
+
+        if (!restaurantIdNumber) {
+          throw new Error('Invalid restaurant context');
+        }
+        
+        const { tableService } = await import('../services/table.service');
+        const updatedTable = await tableService.updateTableStatus(
+          Number(tableId),
+          { status },
+          restaurantIdNumber
+        );
+        
+        // Broadcast to all clients in restaurant
+        if (restaurantId) {
+          io.to(`restaurant:${restaurantId}`).emit('table:updated', updatedTable);
+        }
+        
+        socket.emit('table:updateStatus:success', { tableId, status });
+      } catch (error: any) {
+        console.error('Error updating table status via socket:', error);
+        socket.emit('table:updateStatus:error', { 
+          tableId: data.tableId, 
+          error: error.message 
+        });
+      }
+    });
+
+    // Handle kitchen alert from dashboard
+    socket.on('kitchen:sendAlert', (data: { message: string; orderId?: string }) => {
+      console.log(`Socket event: kitchen:sendAlert - ${data.message}`);
+      if (restaurantId) {
+        io.to(`restaurant:${restaurantId}`).emit('kitchen:alert', {
+          message: data.message,
+          orderId: data.orderId,
+          timestamp: new Date(),
+        });
+      }
+    });
 
     // Disconnect
     socket.on('disconnect', () => {
@@ -84,6 +163,21 @@ export const emitKitchenAlert = (restaurantId: number, order: any) => {
   io.to(`restaurant:${restaurantId}`).emit('kitchen:alert', order);
 };
 
+export const emitMenuUpdate = (restaurantId: number, data: any) => {
+  if (!io) return;
+  io.to(`restaurant:${restaurantId}`).emit('menu:updated', data);
+};
+
+export const emitCategoryUpdate = (restaurantId: number, data: any) => {
+  if (!io) return;
+  io.to(`restaurant:${restaurantId}`).emit('category:updated', data);
+};
+
+export const emitBillingRequest = (restaurantId: number, data: any) => {
+  if (!io) return;
+  io.to(`restaurant:${restaurantId}`).emit('billing:request', data);
+};
+
 export default {
   initSocket,
   getSocketIO,
@@ -92,4 +186,7 @@ export default {
   emitBillUpdate,
   emitTableStatusUpdate,
   emitKitchenAlert,
+  emitMenuUpdate,
+  emitCategoryUpdate,
+  emitBillingRequest,
 };

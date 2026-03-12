@@ -70,13 +70,25 @@ class OrderService {
     return order;
   }
 
+  private async getRestaurantTaxRate(restaurantId: number): Promise<Prisma.Decimal> {
+    const restaurant = await prisma.restaurant.findUnique({
+      where: { id: restaurantId },
+      select: { settings: true },
+    });
+    const settings = restaurant?.settings as any;
+    // Support both key formats for backwards compatibility
+    const pct = Number(settings?.taxPercentage ?? settings?.tax_percentage ?? 5);
+    const safePct = Number.isFinite(pct) && pct >= 0 && pct <= 100 ? pct : 5;
+    return new Prisma.Decimal(safePct).div(100);
+  }
+
   async generateOrderNumber(restaurantId: number): Promise<string> {
     const today = new Date();
     const datePrefix = `ORD${today.getFullYear()}${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}`;
     
+    // Query across ALL restaurants since order_number has a global unique constraint
     const lastOrder = await prisma.order.findFirst({
       where: {
-        restaurantId,
         orderNumber: {
           startsWith: datePrefix,
         },
@@ -93,7 +105,7 @@ class OrderService {
     return `${datePrefix}-${newNumber}`;
   }
 
-  async createOrder(data: CreateOrderInput, restaurantId: number, waiterId: number) {
+  async createOrder(data: CreateOrderInput, restaurantId: number, waiterId?: number, createdByManager: boolean = false) {
     // Verify table exists and belongs to restaurant
     if (data.tableId) {
       const table = await prisma.table.findFirst({
@@ -144,8 +156,9 @@ class OrderService {
       });
     }
 
-    // Calculate tax and total
-    const taxAmount = subtotal.mul(0.05); // 5% tax
+    // Calculate tax and total using restaurant's configured tax rate
+    const taxRate = await this.getRestaurantTaxRate(restaurantId);
+    const taxAmount = subtotal.mul(taxRate);
     const totalAmount = subtotal.add(taxAmount);
 
     // Create order with items
@@ -158,6 +171,8 @@ class OrderService {
         customerName: data.customerName,
         customerPhone: data.customerPhone,
         waiterId,
+        status: createdByManager ? 'preparing' : 'pending',
+        kitchenStatus: createdByManager ? 'preparing' : 'pending',
         subtotal,
         taxAmount,
         totalAmount,
@@ -198,12 +213,21 @@ class OrderService {
       where: { orderId },
     });
 
+    // Get restaurantId from the order so we can read the correct tax rate
+    const orderRecord = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: { restaurantId: true },
+    });
+
     let subtotal = new Prisma.Decimal(0);
     for (const item of orderItems) {
       subtotal = subtotal.add(item.subtotal);
     }
 
-    const taxAmount = subtotal.mul(0.05);
+    const taxRate = orderRecord
+      ? await this.getRestaurantTaxRate(orderRecord.restaurantId)
+      : new Prisma.Decimal(0.05);
+    const taxAmount = subtotal.mul(taxRate);
     const totalAmount = subtotal.add(taxAmount);
 
     await prisma.order.update({
@@ -234,6 +258,34 @@ class OrderService {
     
     if (data.status === 'completed') {
       updateData.completedAt = new Date();
+    }
+
+    // Keep status and kitchenStatus in sync
+    // Map: status → kitchenStatus
+    const statusToKitchen: Record<string, string> = {
+      pending: 'pending',
+      confirmed: 'pending',
+      preparing: 'preparing',
+      ready: 'ready',
+      served: 'ready',
+      billing: 'ready',
+      completed: 'ready',
+    };
+    // Map: kitchenStatus → status (only move forward, never backwards)
+    const kitchenToStatus: Record<string, string> = {
+      preparing: 'preparing',
+      ready: 'ready',
+    };
+
+    if (data.status && !data.kitchenStatus && statusToKitchen[data.status]) {
+      updateData.kitchenStatus = statusToKitchen[data.status];
+    }
+    if (data.kitchenStatus && !data.status && kitchenToStatus[data.kitchenStatus]) {
+      // Only advance the main status if the order is still in a kitchen-relevant state
+      const kitchenStatuses = ['pending', 'confirmed', 'preparing'];
+      if (kitchenStatuses.includes(order.status)) {
+        updateData.status = kitchenToStatus[data.kitchenStatus];
+      }
     }
 
     return await prisma.order.update({
@@ -490,7 +542,7 @@ class OrderService {
       where: {
         restaurantId,
         status: {
-          in: ['pending', 'confirmed', 'preparing'],
+          in: ['pending', 'confirmed', 'preparing', 'ready'],
         },
       },
       include: {

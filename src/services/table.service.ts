@@ -121,7 +121,7 @@ class TableService {
       where: {
         tableId: id,
         status: {
-          in: ['pending', 'preparing', 'ready'],
+          in: ['pending', 'confirmed', 'preparing', 'ready', 'billing'],
         },
       },
     });

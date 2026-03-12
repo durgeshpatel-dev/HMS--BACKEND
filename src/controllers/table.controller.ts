@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { tableService } from "../services/table.service";
 import { sendSuccess, sendError } from '../utils/response.util';
+import { emitTableStatusUpdate } from '../config/socket';
 
 export class TableController {
   async getAllTables(req: Request, res: Response, next: NextFunction) {
@@ -28,6 +29,8 @@ export class TableController {
     try {
       const user = (req as any).user;
       const table = await tableService.createTable(req.body, user.restaurantId);
+      // Broadcast real-time update to all connected clients in this restaurant
+      emitTableStatusUpdate(user.restaurantId, { event: 'created', table });
       return sendSuccess(res, table, 'Table created successfully', 201);
     } catch (error: any) {
       return sendError(res, error.message, 400);
@@ -39,6 +42,7 @@ export class TableController {
       const user = (req as any).user;
       const id = parseInt(req.params.id as string);
       const table = await tableService.updateTable(id, req.body, user.restaurantId);
+      emitTableStatusUpdate(user.restaurantId, { event: 'updated', table });
       return sendSuccess(res, table, 'Table updated successfully');
     } catch (error: any) {
       return sendError(res, error.message, error.message === 'Table not found' ? 404 : 400);
@@ -50,6 +54,7 @@ export class TableController {
       const user = (req as any).user;
       const id = parseInt(req.params.id as string);
       const table = await tableService.updateTableStatus(id, req.body, user.restaurantId);
+      emitTableStatusUpdate(user.restaurantId, { event: 'status_changed', table });
       return sendSuccess(res, table, 'Table status updated successfully');
     } catch (error: any) {
       return sendError(res, error.message, error.message === 'Table not found' ? 404 : 400);
@@ -61,6 +66,7 @@ export class TableController {
       const user = (req as any).user;
       const id = parseInt(req.params.id as string);
       await tableService.deleteTable(id, user.restaurantId);
+      emitTableStatusUpdate(user.restaurantId, { event: 'deleted', tableId: id });
       return sendSuccess(res, null, 'Table deleted successfully');
     } catch (error: any) {
       return sendError(res, error.message, error.message === 'Table not found' ? 404 : 400);

@@ -17,7 +17,7 @@ model Restaurant {
   email      String   @unique @db.VarChar(255)
   phone      String   @db.VarChar(20)
   address    String?  @db.Text
-  settings   Json     @default("{\"currency\":\"INR\",\"tax_percentage\":5,\"operating_hours\":{},\"features\":{\"table_service\":true,\"parcel_orders\":true,\"online_orders\":false}}")
+  settings   Json     @default("{\"currency\":\"INR\",\"taxPercentage\":5,\"gstNumber\":\"\",\"operating_hours\":{},\"features\":{\"table_service\":true,\"parcel_orders\":true,\"online_orders\":false}}")
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
@@ -214,7 +214,9 @@ model Bill {
   billNumber     String   @unique @map("bill_number") @db.VarChar(50)
   subtotal       Decimal  @db.Decimal(10, 2)
   taxAmount      Decimal  @map("tax_amount") @db.Decimal(10, 2)
+  discountPercentage Decimal @default(0) @map("discount_percentage") @db.Decimal(5, 2)
   discountAmount Decimal  @default(0) @map("discount_amount") @db.Decimal(10, 2)
+  extraCharges   Decimal  @default(0) @map("extra_charges") @db.Decimal(10, 2)
   totalAmount    Decimal  @map("total_amount") @db.Decimal(10, 2)
   paymentStatus  String   @default("unpaid") @map("payment_status") @db.VarChar(50) // 'unpaid', 'partial', 'paid'
   createdAt      DateTime @default(now()) @map("created_at")

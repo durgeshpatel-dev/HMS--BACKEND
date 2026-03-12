@@ -1,4 +1,5 @@
 import express, { Application, Request, Response, NextFunction } from 'express';
+import path from 'path';
 import { corsMiddleware } from './middleware/cors.middleware';
 // import { rateLimiter } from './middleware/rateLimit.middleware';
 import { errorHandler, notFoundHandler } from './middleware/error.middleware';
@@ -17,6 +18,10 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 app.use(corsMiddleware);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Serve uploaded files as static assets
+app.use('/uploads', express.static(path.resolve('./uploads')));
+
 // app.use(rateLimiter);
 
 // Health check endpoint

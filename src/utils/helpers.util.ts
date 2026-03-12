@@ -19,15 +19,17 @@ export const generateBillNumber = (): string => {
 export const calculateOrderTotals = (
   subtotal: number,
   taxPercentage: number = 5,
-  discountAmount: number = 0
-): { subtotal: number; taxAmount: number; discountAmount: number; totalAmount: number } => {
+  discountAmount: number = 0,
+  extraCharges: number = 0
+): { subtotal: number; taxAmount: number; discountAmount: number; extraCharges: number; totalAmount: number } => {
   const taxAmount = (subtotal * taxPercentage) / 100;
-  const totalAmount = subtotal + taxAmount - discountAmount;
+  const totalAmount = subtotal + taxAmount - discountAmount + extraCharges;
 
   return {
     subtotal: parseFloat(subtotal.toFixed(2)),
     taxAmount: parseFloat(taxAmount.toFixed(2)),
     discountAmount: parseFloat(discountAmount.toFixed(2)),
+    extraCharges: parseFloat(extraCharges.toFixed(2)),
     totalAmount: parseFloat(totalAmount.toFixed(2)),
   };
 };

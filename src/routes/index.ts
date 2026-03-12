@@ -6,6 +6,8 @@ import orderRoutes from './order.routes';
 import managerRoutes from './manager.routes';
 import billRoutes from './bill.routes';
 import settingsRoutes from './settings.routes';
+import uploadRoutes from './upload.routes';
+import analyticsRoutes from './analytics.routes';
 
 const router = Router();
 
@@ -26,5 +28,7 @@ router.use('/orders', orderRoutes);
 router.use('/manager', managerRoutes);
 router.use('/bills', billRoutes);
 router.use('/settings', settingsRoutes);
+router.use('/upload', uploadRoutes);
+router.use('/analytics', analyticsRoutes);
 
 export default router;

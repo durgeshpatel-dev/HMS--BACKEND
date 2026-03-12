@@ -17,6 +17,10 @@ router.use(requireAuth);
 router.get('/', orderController.getAllOrders);
 router.get('/kitchen', orderController.getKitchenOrders);
 router.get('/my-orders', orderController.getOrdersByWaiter);
+
+// Billing request notification (waiter → manager)
+router.post('/billing-request', requireRole(['waiter', 'manager']), orderController.sendBillingRequest);
+
 router.get('/:id', orderController.getOrderById);
 
 router.post(
@@ -34,7 +38,7 @@ router.put(
 
 router.post(
   '/:id/items',
-  requireRole(['waiter']),
+  requireRole(['waiter', 'manager']),
   validate(addOrderItemsSchema),
   orderController.addOrderItems
 );

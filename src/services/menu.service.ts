@@ -45,8 +45,10 @@ class MenuService {
       where: { restaurantId },
       include: {
         menuItems: {
-          where: { isAvailable: true },
           orderBy: { name: 'asc' },
+        },
+        _count: {
+          select: { menuItems: true },
         },
       },
       orderBy: { displayOrder: 'asc' },
@@ -239,7 +241,7 @@ class MenuService {
     return { message: 'Menu item deleted successfully' };
   }
 
-  async toggleMenuItemAvailability(id: number, restaurantId: number) {
+  async toggleMenuItemAvailability(id: number, restaurantId: number, isAvailable?: boolean) {
     const menuItem = await prisma.menuItem.findFirst({
       where: {
         id,
@@ -251,10 +253,13 @@ class MenuService {
       throw new Error('Menu item not found');
     }
 
+    // Use explicit value if provided, otherwise toggle
+    const newValue = isAvailable !== undefined ? isAvailable : !menuItem.isAvailable;
+
     return await prisma.menuItem.update({
       where: { id },
       data: {
-        isAvailable: !menuItem.isAvailable,
+        isAvailable: newValue,
       },
     });
   }

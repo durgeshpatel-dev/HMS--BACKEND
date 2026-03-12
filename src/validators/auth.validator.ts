@@ -25,7 +25,7 @@ export const managerLoginSchema = z.object({
 
 export const staffLoginSchema = z.object({
   body: z.object({
-    phone: z.string().regex(/^\+?[1-9]\d{1,14}$/, 'Invalid phone number'),
+    phone: z.string().regex(/^(\d{10}|\+?[1-9]\d{1,14})$/, 'Invalid phone number'),
     pin: z.string().regex(/^\d{4,6}$/, 'PIN must be 4-6 digits'),
   }),
 });
