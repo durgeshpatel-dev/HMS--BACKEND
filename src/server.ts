@@ -1,8 +1,17 @@
 import app from './app';
 import config from './config/env';
-import prisma from './config/database';
+import prisma, { pool } from './config/database';
 
 const PORT = config.port;
+
+// Catch unhandled errors so the process doesn't silently hang
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('⚠️  Unhandled Rejection:', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('💥 Uncaught Exception:', err);
+  process.exit(1);
+});
 
 const startServer = async () => {
   try {
@@ -47,23 +56,31 @@ const startServer = async () => {
     app.set('io', io);
 
     // Graceful shutdown
-    process.on('SIGTERM', async () => {
-      console.log('SIGTERM signal received: closing HTTP server');
-      server.close(async () => {
-        console.log('HTTP server closed');
-        await prisma.$disconnect();
-        process.exit(0);
-      });
-    });
+    const gracefulShutdown = async (signal: string) => {
+      console.log(`${signal} signal received: closing HTTP server`);
+      // Force exit after 5 seconds if graceful shutdown hangs
+      const forceTimer = setTimeout(() => {
+        console.error('Forced shutdown after timeout');
+        process.exit(1);
+      }, 5000);
+      forceTimer.unref();
 
-    process.on('SIGINT', async () => {
-      console.log('SIGINT signal received: closing HTTP server');
-      server.close(async () => {
-        console.log('HTTP server closed');
-        await prisma.$disconnect();
-        process.exit(0);
-      });
-    });
+      try {
+        io.close(); // Close all socket connections first
+        server.close(async () => {
+          console.log('HTTP server closed');
+          await prisma.$disconnect();
+          await pool.end();
+          process.exit(0);
+        });
+      } catch (err) {
+        console.error('Error during shutdown:', err);
+        process.exit(1);
+      }
+    };
+
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
   } catch (error) {
     console.error('❌ Failed to start server:', error);
     process.exit(1);

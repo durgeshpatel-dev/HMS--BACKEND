@@ -1,17 +1,18 @@
 import { Request, Response, NextFunction } from 'express';
 import { orderService } from '../services/order.service';
-import { sendSuccess, sendError } from '../utils/response.util';
+import { sendSuccess, sendError, sendPaginatedSuccess } from '../utils/response.util';
 import { emitOrderCreated, emitOrderUpdate, emitTableStatusUpdate, emitBillingRequest } from '../config/socket';
+import { parseId, parsePagination } from '../utils/shared.util';
+import { getErrorStatusCode } from '../utils/errors.util';
 import type { CreateOrderInput, UpdateOrderInput, AddOrderItemsInput, UpdateOrderItemInput } from '../validators/order.validator';
-
-const parseId = (value: string | string[]) => parseInt(String(value), 10);
 
 export class OrderController {
   async getAllOrders(req: Request, res: Response, next: NextFunction) {
     try {
       const user = (req as any).user;
-      const orders = await orderService.getAllOrders(user.restaurantId);
-      return sendSuccess(res, orders, 'Orders retrieved successfully');
+      const { page, limit, skip } = parsePagination(req);
+      const { data, total } = await orderService.getAllOrders(user.restaurantId, skip, limit);
+      return sendPaginatedSuccess(res, data, total, page, limit, 'Orders retrieved successfully');
     } catch (error: any) {
       return sendError(res, error.message, 500);
     }
@@ -24,7 +25,7 @@ export class OrderController {
       const order = await orderService.getOrderById(id, user.restaurantId);
       return sendSuccess(res, order, 'Order retrieved successfully');
     } catch (error: any) {
-      return sendError(res, error.message, error.message === 'Order not found' ? 404 : 500);
+      return sendError(res, error.message, getErrorStatusCode(error, 500));
     }
   }
 
@@ -61,7 +62,7 @@ export class OrderController {
 
       return sendSuccess(res, order, 'Order updated successfully');
     } catch (error: any) {
-      return sendError(res, error.message, error.message === 'Order not found' ? 404 : 400);
+      return sendError(res, error.message, getErrorStatusCode(error, 400));
     }
   }
 
@@ -128,7 +129,7 @@ export class OrderController {
 
       return sendSuccess(res, order, 'Order cancelled successfully');
     } catch (error: any) {
-      return sendError(res, error.message, error.message === 'Order not found' ? 404 : 400);
+      return sendError(res, error.message, getErrorStatusCode(error, 400));
     }
   }
 

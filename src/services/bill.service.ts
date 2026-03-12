@@ -1,47 +1,46 @@
 import prisma from '../config/database';
 import { calculateOrderTotals, generateBillNumber } from '../utils/helpers.util';
+import { getTaxPercentage, getConsolidatedBillingOrders } from '../utils/shared.util';
 import type { GenerateBillInput, RecordPaymentInput } from '../validators/bill.validator';
 
 class BillService {
-  private async getTaxPercentage(restaurantId: number): Promise<number> {
-    const restaurant = await prisma.restaurant.findUnique({
-      where: { id: restaurantId },
-      select: { settings: true },
-    });
+  // Tax percentage fetched via shared utility: getTaxPercentage()
 
-    const settings = restaurant?.settings as any;
-    // Support both camelCase (taxPercentage) and snake_case (tax_percentage) for backwards compatibility
-    const taxPercentage = Number(settings?.taxPercentage ?? settings?.tax_percentage ?? 5);
-    return Number.isFinite(taxPercentage) ? taxPercentage : 5;
-  }
+  async getBills(restaurantId: number, paymentStatus?: string, skip = 0, take = 50) {
+    const where: any = {
+      restaurantId,
+      ...(paymentStatus ? { paymentStatus } : {}),
+    };
 
-  async getBills(restaurantId: number, paymentStatus?: string) {
-    return await prisma.bill.findMany({
-      where: {
-        restaurantId,
-        ...(paymentStatus ? { paymentStatus } : {}),
-      },
-      include: {
-        order: {
-          include: {
-            table: {
-              select: {
-                id: true,
-                tableNumber: true,
+    const [data, total] = await Promise.all([
+      prisma.bill.findMany({
+        where,
+        include: {
+          order: {
+            include: {
+              table: {
+                select: {
+                  id: true,
+                  tableNumber: true,
+                },
               },
-            },
-            waiter: {
-              select: {
-                id: true,
-                name: true,
+              waiter: {
+                select: {
+                  id: true,
+                  name: true,
+                },
               },
             },
           },
+          payments: true,
         },
-        payments: true,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+      }),
+      prisma.bill.count({ where }),
+    ]);
+    return { data, total };
   }
 
   async getBillById(id: number, restaurantId: number) {
@@ -72,19 +71,11 @@ class BillService {
     if (!bill) throw new Error('Bill not found');
 
     // Include all billing-status sibling orders for the same table
-    const consolidatedOrders = bill.order.tableId
-      ? await prisma.order.findMany({
-          where: {
-            tableId: bill.order.tableId,
-            restaurantId,
-            status: 'billing',
-          },
-          include: {
-            items: { include: { menuItem: true } },
-          },
-          orderBy: { createdAt: 'asc' },
-        })
-      : [bill.order];
+    const consolidatedOrders = await getConsolidatedBillingOrders(
+      bill.order.tableId,
+      restaurantId,
+      bill.order
+    );
 
     return { ...bill, consolidatedOrders };
   }
@@ -133,19 +124,11 @@ class BillService {
     if (!bill) throw new Error('Bill not found for this order');
 
     // Include all billing-status sibling orders for the same table
-    const consolidatedOrders = bill.order.tableId
-      ? await prisma.order.findMany({
-          where: {
-            tableId: bill.order.tableId,
-            restaurantId,
-            status: 'billing',
-          },
-          include: {
-            items: { include: { menuItem: true } },
-          },
-          orderBy: { createdAt: 'asc' },
-        })
-      : [bill.order];
+    const consolidatedOrders = await getConsolidatedBillingOrders(
+      bill.order.tableId,
+      restaurantId,
+      bill.order
+    );
 
     return { ...bill, consolidatedOrders };
   }
@@ -202,7 +185,7 @@ class BillService {
         : Number(payload?.discountAmount ?? order.discountAmount ?? 0);
     const extraCharges = Number(payload?.extraCharges ?? 0);
 
-    const taxPercentage = await this.getTaxPercentage(restaurantId);
+    const taxPercentage = await getTaxPercentage(restaurantId);
     const totals = calculateOrderTotals(combinedSubtotal, taxPercentage, discountAmount, extraCharges);
 
     const bill = await prisma.$transaction(async (tx) => {
@@ -282,22 +265,14 @@ class BillService {
           payments: true,
         },
       });
-    });
+    }, { timeout: 15000 });
 
     // Fetch all billing orders for this table to include in response
-    const consolidatedOrders = order.tableId
-      ? await prisma.order.findMany({
-          where: {
-            tableId: order.tableId,
-            restaurantId,
-            status: 'billing',
-          },
-          include: {
-            items: { include: { menuItem: true } },
-          },
-          orderBy: { createdAt: 'asc' },
-        })
-      : allOrders;
+    const consolidatedOrders = await getConsolidatedBillingOrders(
+      order.tableId,
+      restaurantId,
+      { ...order, items: order.items }
+    );
 
     return { ...bill, consolidatedOrders };
   }
@@ -391,7 +366,7 @@ class BillService {
       }
 
       return { bill: updatedBill, payment };
-    });
+    }, { timeout: 15000 });
 
     return result;
   }

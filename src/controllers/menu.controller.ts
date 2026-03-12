@@ -1,7 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import { menuService } from "../services/menu.service";
-import { sendSuccess, sendError } from '../utils/response.util';
+import { sendSuccess, sendError, sendPaginatedSuccess } from '../utils/response.util';
 import { emitMenuUpdate, emitCategoryUpdate } from '../config/socket';
+import { getErrorStatusCode } from '../utils/errors.util';
+import { parsePagination } from '../utils/shared.util';
 
 export class MenuController {
   async getAllCategories(req: Request, res: Response, next: NextFunction) {
@@ -21,7 +23,7 @@ export class MenuController {
       const category = await menuService.getCategoryById(id, user.restaurantId);
       return sendSuccess(res, category, 'Category retrieved successfully');
     } catch (error: any) {
-      return sendError(res, error.message, error.message === 'Category not found' ? 404 : 500);
+      return sendError(res, error.message, getErrorStatusCode(error, 500));
     }
   }
 
@@ -44,7 +46,7 @@ export class MenuController {
       emitCategoryUpdate(user.restaurantId, { event: 'updated', category });
       return sendSuccess(res, category, 'Category updated successfully');
     } catch (error: any) {
-      return sendError(res, error.message, error.message === 'Category not found' ? 404 : 400);
+      return sendError(res, error.message, getErrorStatusCode(error, 400));
     }
   }
 
@@ -56,7 +58,7 @@ export class MenuController {
       emitCategoryUpdate(user.restaurantId, { event: 'deleted', categoryId: id });
       return sendSuccess(res, null, 'Category deleted successfully');
     } catch (error: any) {
-      return sendError(res, error.message, error.message === 'Category not found' ? 404 : 400);
+      return sendError(res, error.message, getErrorStatusCode(error, 400));
     }
   }
 
@@ -64,8 +66,9 @@ export class MenuController {
     try {
       const user = (req as any).user;
       const categoryId = req.query.categoryId ? parseInt(req.query.categoryId as string) : undefined;
-      const menuItems = await menuService.getAllMenuItems(user.restaurantId, categoryId);
-      return sendSuccess(res, menuItems, 'Menu items retrieved successfully');
+      const { page, limit, skip } = parsePagination(req);
+      const { data, total } = await menuService.getAllMenuItems(user.restaurantId, categoryId, skip, limit);
+      return sendPaginatedSuccess(res, data, total, page, limit, 'Menu items retrieved successfully');
     } catch (error: any) {
       return sendError(res, error.message);
     }
@@ -78,7 +81,7 @@ export class MenuController {
       const menuItem = await menuService.getMenuItemById(id, user.restaurantId);
       return sendSuccess(res, menuItem, 'Menu item retrieved successfully');
     } catch (error: any) {
-      return sendError(res, error.message, error.message === 'Menu item not found' ? 404 : 500);
+      return sendError(res, error.message, getErrorStatusCode(error, 500));
     }
   }
 
@@ -101,7 +104,7 @@ export class MenuController {
       emitMenuUpdate(user.restaurantId, { event: 'updated', menuItem });
       return sendSuccess(res, menuItem, 'Menu item updated successfully');
     } catch (error: any) {
-      return sendError(res, error.message, error.message === 'Menu item not found' ? 404 : 400);
+      return sendError(res, error.message, getErrorStatusCode(error, 400));
     }
   }
 
@@ -113,7 +116,7 @@ export class MenuController {
       emitMenuUpdate(user.restaurantId, { event: 'deleted', menuItemId: id });
       return sendSuccess(res, null, 'Menu item deleted successfully');
     } catch (error: any) {
-      return sendError(res, error.message, error.message === 'Menu item not found' ? 404 : 400);
+      return sendError(res, error.message, getErrorStatusCode(error, 400));
     }
   }
 
@@ -126,7 +129,7 @@ export class MenuController {
       emitMenuUpdate(user.restaurantId, { event: 'availability_changed', menuItem });
       return sendSuccess(res, menuItem, 'Menu item availability toggled successfully');
     } catch (error: any) {
-      return sendError(res, error.message, error.message === 'Menu item not found' ? 404 : 500);
+      return sendError(res, error.message, getErrorStatusCode(error, 500));
     }
   }
 }

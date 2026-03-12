@@ -44,7 +44,7 @@ export class AuthService {
       });
 
       return { user, restaurant };
-    });
+    }, { timeout: 15000 });
 
     return {
       userId: result.user.id,

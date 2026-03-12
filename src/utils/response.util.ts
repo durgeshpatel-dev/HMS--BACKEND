@@ -6,6 +6,12 @@ interface ApiResponse<T = any> {
   data?: T;
   error?: string;
   errors?: any[];
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
 }
 
 export const sendSuccess = <T>(
@@ -22,6 +28,34 @@ export const sendSuccess = <T>(
   if (data !== undefined) response.data = data;
 
   return res.status(statusCode).json(response);
+};
+
+/**
+ * Send a paginated success response.
+ * Returns { success, message, data, pagination: { page, limit, total, totalPages } }
+ */
+export const sendPaginatedSuccess = <T>(
+  res: Response,
+  data: T[],
+  total: number,
+  page: number,
+  limit: number,
+  message?: string,
+): Response => {
+  const response: ApiResponse<T[]> = {
+    success: true,
+    data,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
+
+  if (message) response.message = message;
+
+  return res.status(200).json(response);
 };
 
 export const sendError = (

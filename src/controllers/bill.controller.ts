@@ -1,18 +1,19 @@
 import { Request, Response } from 'express';
 import { billService } from '../services/bill.service';
-import { sendError, sendSuccess } from '../utils/response.util';
+import { sendError, sendSuccess, sendPaginatedSuccess } from '../utils/response.util';
 import { emitBillUpdate, emitOrderUpdate, emitTableStatusUpdate } from '../config/socket';
+import { parseId, parsePagination } from '../utils/shared.util';
+import { getErrorStatusCode } from '../utils/errors.util';
 import type { GenerateBillInput, RecordPaymentInput } from '../validators/bill.validator';
-
-const parseId = (value: string | string[]) => parseInt(String(value), 10);
 
 class BillController {
   async getBills(req: Request, res: Response) {
     try {
       const user = (req as any).user;
       const paymentStatus = req.query.paymentStatus as string | undefined;
-      const bills = await billService.getBills(user.restaurantId, paymentStatus);
-      return sendSuccess(res, bills, 'Bills retrieved successfully');
+      const { page, limit, skip } = parsePagination(req);
+      const { data, total } = await billService.getBills(user.restaurantId, paymentStatus, skip, limit);
+      return sendPaginatedSuccess(res, data, total, page, limit, 'Bills retrieved successfully');
     } catch (error: any) {
       return sendError(res, error.message, 500);
     }
@@ -25,7 +26,7 @@ class BillController {
       const bill = await billService.getBillById(id, user.restaurantId);
       return sendSuccess(res, bill, 'Bill retrieved successfully');
     } catch (error: any) {
-      return sendError(res, error.message, error.message.includes('not found') ? 404 : 500);
+      return sendError(res, error.message, getErrorStatusCode(error, 500));
     }
   }
 

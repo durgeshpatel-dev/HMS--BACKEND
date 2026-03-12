@@ -58,7 +58,7 @@ export const initSocket = (server: HTTPServer): SocketIOServer => {
         const { orderService } = await import('../services/order.service');
         const updatedOrder = await orderService.updateOrder(
           Number(orderId),
-          { status },
+          { status: status as any },
           restaurantIdNumber
         );
         
@@ -91,7 +91,7 @@ export const initSocket = (server: HTTPServer): SocketIOServer => {
         const { tableService } = await import('../services/table.service');
         const updatedTable = await tableService.updateTableStatus(
           Number(tableId),
-          { status },
+          { status: status as any },
           restaurantIdNumber
         );
         

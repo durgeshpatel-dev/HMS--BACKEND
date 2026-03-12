@@ -4,13 +4,16 @@ import { PrismaPg } from '@prisma/adapter-pg';
 
 const connectionString = process.env.DATABASE_URL!;
 
-// Configure PG pool - keep connections minimal for development
+// Configure PG pool
+// max must be large enough to handle concurrent interactive transactions
+// (each Prisma $transaction holds one connection for its duration).
 const pool = new Pool({
   connectionString,
-  max: 5, // Smaller pool for development  
-  min: 2, // Minimum connections
-  idleTimeoutMillis: 10000, // Close idle connections after 10 seconds
-  connectionTimeoutMillis: 5000, // Fail fast if cannot connect
+  max: 15, // Must exceed max concurrent $transactions to avoid deadlocks
+  min: 2,
+  idleTimeoutMillis: 30000, // Close idle connections after 30 seconds
+  connectionTimeoutMillis: 10000, // Fail after 10s if no connection available
+  statement_timeout: 30000, // Kill any query running longer than 30s
 });
 
 // Log pool errors
@@ -25,4 +28,15 @@ const prisma = new PrismaClient({
   log: ['error'],  // Only log errors in development
 });
 
+// Log warning when pool is nearly exhausted (helps diagnose hangs)
+setInterval(() => {
+  const waiting = pool.waitingCount;
+  const idle = pool.idleCount;
+  const total = pool.totalCount;
+  if (waiting > 0) {
+    console.warn(`⚠️  DB Pool pressure: ${total} total, ${idle} idle, ${waiting} waiting`);
+  }
+}, 5000);
+
+export { pool };
 export default prisma;

@@ -123,7 +123,7 @@ class MenuService {
 
   // ========== Menu Item Methods ==========
 
-  async getAllMenuItems(restaurantId: number, categoryId?: number) {
+  async getAllMenuItems(restaurantId: number, categoryId?: number, skip = 0, take = 50) {
     const where: any = { 
       restaurantId 
     };
@@ -132,18 +132,24 @@ class MenuService {
       where.categoryId = categoryId;
     }
 
-    return await prisma.menuItem.findMany({
-      where,
-      include: {
-        category: {
-          select: {
-            id: true,
-            name: true,
+    const [data, total] = await Promise.all([
+      prisma.menuItem.findMany({
+        where,
+        include: {
+          category: {
+            select: {
+              id: true,
+              name: true,
+            },
           },
         },
-      },
-      orderBy: { name: 'asc' },
-    });
+        orderBy: { name: 'asc' },
+        skip,
+        take,
+      }),
+      prisma.menuItem.count({ where }),
+    ]);
+    return { data, total };
   }
 
   async getMenuItemById(id: number, restaurantId: number) {

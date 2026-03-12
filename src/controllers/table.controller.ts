@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { tableService } from "../services/table.service";
 import { sendSuccess, sendError } from '../utils/response.util';
 import { emitTableStatusUpdate } from '../config/socket';
+import { getErrorStatusCode } from '../utils/errors.util';
 
 export class TableController {
   async getAllTables(req: Request, res: Response, next: NextFunction) {
@@ -21,7 +22,7 @@ export class TableController {
       const table = await tableService.getTableById(id, user.restaurantId);
       return sendSuccess(res, table, 'Table retrieved successfully');
     } catch (error: any) {
-      return sendError(res, error.message, error.message === 'Table not found' ? 404 : 500);
+      return sendError(res, error.message, getErrorStatusCode(error, 500));
     }
   }
 
@@ -45,7 +46,7 @@ export class TableController {
       emitTableStatusUpdate(user.restaurantId, { event: 'updated', table });
       return sendSuccess(res, table, 'Table updated successfully');
     } catch (error: any) {
-      return sendError(res, error.message, error.message === 'Table not found' ? 404 : 400);
+      return sendError(res, error.message, getErrorStatusCode(error, 400));
     }
   }
 
@@ -57,7 +58,7 @@ export class TableController {
       emitTableStatusUpdate(user.restaurantId, { event: 'status_changed', table });
       return sendSuccess(res, table, 'Table status updated successfully');
     } catch (error: any) {
-      return sendError(res, error.message, error.message === 'Table not found' ? 404 : 400);
+      return sendError(res, error.message, getErrorStatusCode(error, 400));
     }
   }
 
@@ -69,7 +70,7 @@ export class TableController {
       emitTableStatusUpdate(user.restaurantId, { event: 'deleted', tableId: id });
       return sendSuccess(res, null, 'Table deleted successfully');
     } catch (error: any) {
-      return sendError(res, error.message, error.message === 'Table not found' ? 404 : 400);
+      return sendError(res, error.message, getErrorStatusCode(error, 400));
     }
   }
 
