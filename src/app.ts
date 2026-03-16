@@ -35,6 +35,14 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Root endpoint (production-friendly API landing response)
+app.get('/', (req: Request, res: Response) => {
+  res.json({
+    service: 'Restaurant HMS Backend API',
+    status: 'running',
+  });
+});
+
 // API routes
 app.use(`/api/${config.apiVersion}`, routes);
 

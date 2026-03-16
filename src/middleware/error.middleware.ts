@@ -11,10 +11,16 @@ export const errorHandler = (
   res: Response,
   next: NextFunction
 ): Response => {
-  console.error('Error:', err);
+  console.error('Error:', {
+    message: err.message,
+    statusCode: err.statusCode,
+    path: req.originalUrl,
+    method: req.method,
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+  });
 
   const statusCode = err.statusCode || 500;
-  const message = err.message || 'Internal server error';
+  const message = statusCode >= 500 ? 'Internal server error' : (err.message || 'Request failed');
 
   return sendError(res, message, statusCode);
 };
