@@ -8,11 +8,8 @@ export const corsMiddleware = cors({
 
     const allowedOrigins = config.cors.origin;
     const isExplicitlyAllowed = allowedOrigins.includes(origin) || allowedOrigins.includes('*');
-    const isLocalDevOrigin =
-      config.nodeEnv === 'development' &&
-      /^https?:\/\/(localhost|127\.0\.0\.1|10\.0\.2\.2|192\.168\.\d{1,3}\.\d{1,3})(:\d+)?$/.test(origin);
 
-    if (isExplicitlyAllowed || isLocalDevOrigin) {
+    if (isExplicitlyAllowed) {
       callback(null, true);
     } else {
       console.warn(`[CORS] Blocked origin: ${origin}`);
@@ -20,6 +17,7 @@ export const corsMiddleware = cors({
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
+  optionsSuccessStatus: 204,
 });

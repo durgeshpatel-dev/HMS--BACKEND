@@ -16,6 +16,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
 // Middleware
 app.use(corsMiddleware);
+app.options('*', corsMiddleware);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
