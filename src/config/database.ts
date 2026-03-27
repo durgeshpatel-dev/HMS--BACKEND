@@ -22,7 +22,9 @@ pool.on('error', (err) => {
   console.error('Unexpected database pool error:', err);
 });
 
-const adapter = new PrismaPg(pool);
+// NOTE: Prisma adapter and root pg typings can differ across environments.
+// Cast keeps runtime behavior identical while avoiding TS type-package mismatch.
+const adapter = new PrismaPg(pool as any);
 
 const prisma = new PrismaClient({
   adapter,

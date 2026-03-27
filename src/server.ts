@@ -3,6 +3,7 @@ import config from './config/env';
 import prisma, { pool } from './config/database';
 
 const PORT = config.port;
+const DB_RETRY_INTERVAL_MS = 10000;
 
 // Catch unhandled errors so the process doesn't silently hang
 process.on('unhandledRejection', (reason, promise) => {
@@ -14,11 +15,26 @@ process.on('uncaughtException', (err) => {
 });
 
 const startServer = async () => {
-  try {
-    // Test database connection
-    await prisma.$connect();
-    console.log('✅ Database connected successfully');
+  let isDbConnected = false;
 
+  const connectDatabaseWithRetry = async () => {
+    try {
+      await prisma.$connect();
+      isDbConnected = true;
+      app.locals.dbConnected = true;
+      console.log('✅ Database connected successfully');
+    } catch (error) {
+      isDbConnected = false;
+      app.locals.dbConnected = false;
+      console.error(`❌ Database connection failed. Retrying in ${DB_RETRY_INTERVAL_MS / 1000}s...`, error);
+
+      setTimeout(() => {
+        void connectDatabaseWithRetry();
+      }, DB_RETRY_INTERVAL_MS);
+    }
+  };
+
+  try {
     const server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`
 ╔═══════════════════════════════════════════════════════╗
@@ -35,10 +51,14 @@ const startServer = async () => {
 ║                                                       ║
 ║   Health Check:                                       ║
 ║   http://localhost:${PORT}/health                      ║
+║   DB Status: ${isDbConnected ? 'connected' : 'connecting...'.padEnd(39)}║
 ║                                                       ║
 ╚═══════════════════════════════════════════════════════╝
       `);
     });
+
+    // Start DB connection attempts in background so server remains alive
+    void connectDatabaseWithRetry();
 
     // Initialize Socket.io
     const { initSocket } = require('./config/socket');

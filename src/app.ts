@@ -27,11 +27,14 @@ app.use('/uploads', express.static(path.resolve('./uploads')));
 // Health check endpoint
 app.get('/health', (req, res) => {
   console.log('Health check endpoint hit');
+  const dbConnected = Boolean(req.app.locals?.dbConnected);
+
   res.json({
     success: true,
     message: 'Restaurant HMS Backend API is running',
     timestamp: new Date().toISOString(),
     environment: config.nodeEnv,
+    database: dbConnected ? 'connected' : 'connecting_or_unavailable',
   });
 });
 
