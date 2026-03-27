@@ -3,7 +3,7 @@ module.exports = {
     {
       name: 'hms-backend',
       script: 'dist/server.js',
-      cwd: '/home/patel/HMS all/HMS--BACKEND',
+      cwd: __dirname,
       instances: 1,
       exec_mode: 'fork',
       autorestart: true,
