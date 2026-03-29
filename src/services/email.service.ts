@@ -75,6 +75,7 @@ class EmailService {
         text: payload.text,
         html: payload.html,
       });
+      console.log('[EmailService] Email sent successfully to:', payload.to);
       return true;
     } catch (error: any) {
       console.error('[EmailService] SMTP send failed:', error?.message || error);
