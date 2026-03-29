@@ -22,7 +22,7 @@ class EmailService {
   }
 
   private hasSmtpConfig() {
-    return Boolean(
+    const hasConfig = Boolean(
       config.mail.host &&
       config.mail.port &&
       config.mail.user &&
@@ -30,6 +30,12 @@ class EmailService {
       !this.isPlaceholder(config.mail.user) &&
       !this.isPlaceholder(config.mail.pass)
     );
+    
+    if (!hasConfig) {
+      console.warn('[EmailService] SMTP config check failed. User:', config.mail.user, 'Pass length:', config.mail.pass?.length);
+    }
+    
+    return hasConfig;
   }
 
   private getTransporter() {
