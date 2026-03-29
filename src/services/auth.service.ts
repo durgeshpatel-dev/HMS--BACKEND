@@ -301,9 +301,9 @@ export class AuthService {
     });
 
     const resetUrl = `${config.app.frontendUrl.replace(/\/$/, '')}/reset-password?token=${token}`;
-    emailService.sendPasswordResetEmail(user.email, user.name, resetUrl);
+    const sent = await emailService.sendPasswordResetEmail(user.email, user.name, resetUrl);
 
-    return { sent: true };
+    return { sent };
   }
 
   async resetPassword(data: ResetPasswordInput) {

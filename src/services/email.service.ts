@@ -22,7 +22,7 @@ class EmailService {
   }
 
   private hasSmtpConfig() {
-    const hasConfig = Boolean(
+    return Boolean(
       config.mail.host &&
       config.mail.port &&
       config.mail.user &&
@@ -30,12 +30,6 @@ class EmailService {
       !this.isPlaceholder(config.mail.user) &&
       !this.isPlaceholder(config.mail.pass)
     );
-    
-    if (!hasConfig) {
-      console.warn('[EmailService] SMTP config check failed. User:', config.mail.user, 'Pass length:', config.mail.pass?.length);
-    }
-    
-    return hasConfig;
   }
 
   private getTransporter() {
@@ -83,7 +77,7 @@ class EmailService {
     }
   }
 
-  sendSignupOtp(email: string, managerName: string, otp: string) {
+  async sendSignupOtp(email: string, managerName: string, otp: string) {
     const subject = 'Verify your manager account (OTP)';
     const text = `Hi ${managerName},\n\nYour HMS signup OTP is ${otp}. It expires in ${config.authFlow.signupOtpTtlMinutes} minutes.\n\nIf you did not request this, ignore this email.`;
     const html = `
@@ -97,16 +91,14 @@ class EmailService {
       </div>
     `;
 
-    // Log OTP to console for development/testing
-    console.log(`\n[OTP] Email: ${email} | OTP: ${otp} | Expires: ${config.authFlow.signupOtpTtlMinutes} min\n`);
+    if (config.nodeEnv !== 'production') {
+      console.log(`\n[OTP] Email: ${email} | OTP: ${otp} | Expires: ${config.authFlow.signupOtpTtlMinutes} min\n`);
+    }
 
-    // Fire-and-forget: send email asynchronously without blocking the API response
-    this.send({ to: email, subject, text, html }).catch(err => {
-      console.error('[EmailService] sendSignupOtp async error:', err);
-    });
+    return this.send({ to: email, subject, text, html });
   }
 
-  sendPasswordResetEmail(email: string, managerName: string, resetUrl: string) {
+  async sendPasswordResetEmail(email: string, managerName: string, resetUrl: string) {
     const subject = 'Reset your HMS manager password';
     const text = `Hi ${managerName},\n\nClick this link to reset your password:\n${resetUrl}\n\nThis link expires in ${config.authFlow.passwordResetTtlMinutes} minutes.\n\nIf you did not request this, ignore this email.`;
     const html = `
@@ -123,13 +115,11 @@ class EmailService {
       </div>
     `;
 
-    // Log reset URL to console for development/testing
-    console.log(`\n[PASSWORD RESET] Email: ${email} | Reset URL: ${resetUrl} | Expires: ${config.authFlow.passwordResetTtlMinutes} min\n`);
+    if (config.nodeEnv !== 'production') {
+      console.log(`\n[PASSWORD RESET] Email: ${email} | Reset URL: ${resetUrl} | Expires: ${config.authFlow.passwordResetTtlMinutes} min\n`);
+    }
 
-    // Fire-and-forget: send email asynchronously without blocking the API response
-    this.send({ to: email, subject, text, html }).catch(err => {
-      console.error('[EmailService] sendPasswordResetEmail async error:', err);
-    });
+    return this.send({ to: email, subject, text, html });
   }
 }
 

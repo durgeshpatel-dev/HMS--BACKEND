@@ -3,7 +3,6 @@ import authController from '../controllers/auth.controller';
 import { validate } from '../middleware/validate.middleware';
 import { requireAuth } from '../middleware/auth.middleware';
 import { authRateLimiter } from '../middleware/rateLimit.middleware';
-import prisma from '../config/database';
 import {
   managerSignupSchema,
   managerLoginSchema,
@@ -80,22 +79,5 @@ router.post(
   requireAuth,
   authController.logout.bind(authController)
 );
-
-// Admin: Approve manager account (quick endpoint for development)
-router.post('/admin/approve-manager', async (req, res) => {
-  try {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ error: 'Email required' });
-    
-    const user = await prisma.user.update({
-      where: { email },
-      data: { status: 'active' }
-    });
-    
-    res.json({ success: true, email: user.email, status: user.status });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
 export default router;
