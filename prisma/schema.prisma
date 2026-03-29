@@ -17,7 +17,7 @@ model Restaurant {
   email      String   @unique @db.VarChar(255)
   phone      String   @db.VarChar(20)
   address    String?  @db.Text
-  settings   Json     @default("{\"currency\":\"INR\",\"taxPercentage\":5,\"gstNumber\":\"\",\"operating_hours\":{},\"features\":{\"table_service\":true,\"parcel_orders\":true,\"online_orders\":false}}")
+  settings   Json     @default("{\"currency\":\"INR\",\"tax_percentage\":5,\"operating_hours\":{},\"features\":{\"table_service\":true,\"parcel_orders\":true,\"online_orders\":false}}")
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
@@ -50,11 +50,46 @@ model User {
   updatedAt     DateTime @updatedAt @map("updated_at")
 
   // Relations
-  restaurant    Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  restaurant      Restaurant            @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  otpVerification UserOtpVerification?
+  passwordReset   UserPasswordReset?
 
   @@index([email])
   @@index([restaurantId])
   @@map("users")
+}
+
+model UserOtpVerification {
+  id         Int       @id @default(autoincrement())
+  userId     Int       @unique @map("user_id")
+  otpHash    String    @map("otp_hash") @db.VarChar(255)
+  expiresAt  DateTime  @map("expires_at")
+  attempts   Int       @default(0)
+  verifiedAt DateTime? @map("verified_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@map("user_otp_verifications")
+}
+
+model UserPasswordReset {
+  id          Int       @id @default(autoincrement())
+  userId      Int       @unique @map("user_id")
+  tokenHash   String    @unique @map("token_hash") @db.VarChar(255)
+  expiresAt   DateTime  @map("expires_at")
+  consumedAt  DateTime? @map("consumed_at")
+  requestedAt DateTime  @default(now()) @map("requested_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@index([consumedAt])
+  @@map("user_password_resets")
 }
 
 // Staff table (Waiters, Cooks)

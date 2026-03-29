@@ -1,7 +1,16 @@
 import { Request, Response, NextFunction } from 'express';
 import authService from '../services/auth.service';
 import { sendSuccess, sendError } from '../utils/response.util';
-import type { ManagerSignupInput, ManagerLoginInput, StaffLoginInput, RefreshTokenInput } from '../validators/auth.validator';
+import type {
+  ManagerSignupInput,
+  ManagerLoginInput,
+  StaffLoginInput,
+  RefreshTokenInput,
+  VerifySignupOtpInput,
+  ResendSignupOtpInput,
+  ForgotPasswordInput,
+  ResetPasswordInput,
+} from '../validators/auth.validator';
 
 export class AuthController {
   // Manager Signup
@@ -12,7 +21,7 @@ export class AuthController {
       return sendSuccess(
         res,
         result,
-        'Account created successfully. Your account is pending approval by admin.',
+        'Account created. Verify OTP sent to your email, then wait for admin approval.',
         201
       );
     } catch (error: any) {
@@ -32,12 +41,41 @@ export class AuthController {
     } catch (error: any) {
       if (
         error.message === 'Invalid credentials' ||
+        error.message === 'Please verify your email with OTP before login' ||
         error.message === 'Your account is pending approval' ||
         error.message === 'Your account application was rejected' ||
         error.message === 'Your account has been suspended'
       ) {
         return sendError(res, error.message, error.message === 'Invalid credentials' ? 401 : 403);
       }
+      return next(error);
+    }
+  }
+
+  async verifySignupOtp(req: Request, res: Response, next: NextFunction) {
+    try {
+      const data: VerifySignupOtpInput = req.body;
+      const result = await authService.verifySignupOtp(data);
+      return sendSuccess(res, result, 'Email verified successfully', 200);
+    } catch (error: any) {
+      if (
+        error.message === 'Invalid OTP request' ||
+        error.message === 'Invalid OTP' ||
+        error.message === 'OTP has expired. Please request a new OTP' ||
+        error.message === 'Too many invalid OTP attempts. Please request a new OTP'
+      ) {
+        return sendError(res, error.message, 400);
+      }
+      return next(error);
+    }
+  }
+
+  async resendSignupOtp(req: Request, res: Response, next: NextFunction) {
+    try {
+      const data: ResendSignupOtpInput = req.body;
+      const result = await authService.resendSignupOtp(data);
+      return sendSuccess(res, result, 'If eligible, a new OTP has been sent', 200);
+    } catch (error: any) {
       return next(error);
     }
   }
@@ -75,6 +113,29 @@ export class AuthController {
     // In a stateless JWT system, logout is handled client-side by removing the token
     // Here we just confirm the action
     return sendSuccess(res, undefined, 'Logged out successfully', 200);
+  }
+
+  async forgotPassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      const data: ForgotPasswordInput = req.body;
+      const result = await authService.forgotPassword(data);
+      return sendSuccess(res, result, 'If that email exists, a reset link has been sent', 200);
+    } catch (error: any) {
+      return next(error);
+    }
+  }
+
+  async resetPassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      const data: ResetPasswordInput = req.body;
+      const result = await authService.resetPassword(data);
+      return sendSuccess(res, result, 'Password reset successful', 200);
+    } catch (error: any) {
+      if (error.message === 'Invalid or expired reset link') {
+        return sendError(res, error.message, 400);
+      }
+      return next(error);
+    }
   }
 }
 

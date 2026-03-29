@@ -24,6 +24,21 @@ interface Config {
     windowMs: number;
     maxRequests: number;
   };
+  app: {
+    frontendUrl: string;
+  };
+  mail: {
+    host: string;
+    port: number;
+    secure: boolean;
+    user: string;
+    pass: string;
+    from: string;
+  };
+  authFlow: {
+    signupOtpTtlMinutes: number;
+    passwordResetTtlMinutes: number;
+  };
 }
 
 const config: Config = {
@@ -58,6 +73,21 @@ const config: Config = {
   rateLimit: {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10),
     maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),
+  },
+  app: {
+    frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
+  },
+  mail: {
+    host: process.env.SMTP_HOST || '',
+    port: parseInt(process.env.SMTP_PORT || '587', 10),
+    secure: (process.env.SMTP_SECURE || 'false').toLowerCase() === 'true',
+    user: process.env.SMTP_USER || '',
+    pass: process.env.SMTP_PASS || '',
+    from: process.env.SMTP_FROM || process.env.SMTP_USER || 'no-reply@hms.local',
+  },
+  authFlow: {
+    signupOtpTtlMinutes: parseInt(process.env.SIGNUP_OTP_TTL_MINUTES || '10', 10),
+    passwordResetTtlMinutes: parseInt(process.env.PASSWORD_RESET_TTL_MINUTES || '30', 10),
   },
 };
 

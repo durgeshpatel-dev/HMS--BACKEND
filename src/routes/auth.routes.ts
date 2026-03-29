@@ -8,6 +8,10 @@ import {
   managerLoginSchema,
   staffLoginSchema,
   refreshTokenSchema,
+  verifySignupOtpSchema,
+  resendSignupOtpSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
 } from '../validators/auth.validator';
 
 const router = Router();
@@ -25,6 +29,34 @@ router.post(
   authRateLimiter,
   validate(managerLoginSchema),
   authController.managerLogin.bind(authController)
+);
+
+router.post(
+  '/manager/verify-signup-otp',
+  authRateLimiter,
+  validate(verifySignupOtpSchema),
+  authController.verifySignupOtp.bind(authController)
+);
+
+router.post(
+  '/manager/resend-signup-otp',
+  authRateLimiter,
+  validate(resendSignupOtpSchema),
+  authController.resendSignupOtp.bind(authController)
+);
+
+router.post(
+  '/manager/forgot-password',
+  authRateLimiter,
+  validate(forgotPasswordSchema),
+  authController.forgotPassword.bind(authController)
+);
+
+router.post(
+  '/manager/reset-password',
+  authRateLimiter,
+  validate(resetPasswordSchema),
+  authController.resetPassword.bind(authController)
 );
 
 // Staff Authentication
