@@ -1,11 +1,9 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
 import authController from '../controllers/auth.controller';
 import { validate } from '../middleware/validate.middleware';
 import { requireAuth } from '../middleware/auth.middleware';
 import { authRateLimiter } from '../middleware/rateLimit.middleware';
-
-const prisma = new PrismaClient();
+import prisma from '../config/database';
 import {
   managerSignupSchema,
   managerLoginSchema,
