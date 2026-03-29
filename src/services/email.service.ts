@@ -11,8 +11,25 @@ type MailPayload = {
 class EmailService {
   private transporter: nodemailer.Transporter | null = null;
 
+  private isPlaceholder(value: string) {
+    const normalized = (value || '').trim().toLowerCase();
+    return (
+      !normalized ||
+      normalized.includes('your-email@gmail.com') ||
+      normalized.includes('your-app-password') ||
+      normalized.includes('changeme')
+    );
+  }
+
   private hasSmtpConfig() {
-    return Boolean(config.mail.host && config.mail.port && config.mail.user && config.mail.pass);
+    return Boolean(
+      config.mail.host &&
+      config.mail.port &&
+      config.mail.user &&
+      config.mail.pass &&
+      !this.isPlaceholder(config.mail.user) &&
+      !this.isPlaceholder(config.mail.pass)
+    );
   }
 
   private getTransporter() {
@@ -32,7 +49,7 @@ class EmailService {
     return this.transporter;
   }
 
-  async send(payload: MailPayload) {
+  async send(payload: MailPayload): Promise<boolean> {
     const transporter = this.getTransporter();
 
     if (!transporter) {
@@ -41,16 +58,22 @@ class EmailService {
         subject: payload.subject,
         text: payload.text,
       });
-      return;
+      return false;
     }
 
-    await transporter.sendMail({
-      from: config.mail.from,
-      to: payload.to,
-      subject: payload.subject,
-      text: payload.text,
-      html: payload.html,
-    });
+    try {
+      await transporter.sendMail({
+        from: config.mail.from,
+        to: payload.to,
+        subject: payload.subject,
+        text: payload.text,
+        html: payload.html,
+      });
+      return true;
+    } catch (error: any) {
+      console.error('[EmailService] SMTP send failed:', error?.message || error);
+      return false;
+    }
   }
 
   async sendSignupOtp(email: string, managerName: string, otp: string) {
