@@ -38,10 +38,18 @@ const config: Config = {
     refreshExpiry: process.env.JWT_REFRESH_EXPIRY || '30d',
   },
   cors: {
-    origin: (process.env.ALLOWED_ORIGINS || process.env.CORS_ORIGIN || 'http://localhost:5173,http://localhost:3000,http://localhost:8081')
-      .split(',')
-      .map((o) => o.trim())
-      .filter(Boolean),
+    origin: Array.from(
+      new Set([
+        ...(process.env.ALLOWED_ORIGINS || process.env.CORS_ORIGIN || 'http://localhost:5173,http://localhost:3000,http://localhost:8081')
+          .split(',')
+          .map((o) => o.trim())
+          .filter(Boolean),
+        'https://hms.dppatel.in',
+        'https://app.dppatel.in',
+        'https://hms-app-prod.web.app',
+        'https://hms-app-prod.firebaseapp.com',
+      ])
+    ),
   },
   upload: {
     maxFileSize: parseInt(process.env.MAX_FILE_SIZE || '5242880', 10),
