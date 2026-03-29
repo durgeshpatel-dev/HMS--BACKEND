@@ -15,6 +15,7 @@ Its purpose is to help any new AI chat instantly understand the system and conti
 | [api.md](api.md) | All REST API endpoints, methods, roles, and request/response formats |
 | [database.md](database.md) | All database tables, columns, types, and relationships |
 | [features.md](features.md) | Full list of implemented features per module |
+| [deployment.md](deployment.md) | Current production deployment model and CI/CD operations context |
 | [coding_rules.md](coding_rules.md) | Rules all developers and AI assistants must follow |
 | [.copilot-rules.md](.copilot-rules.md) | Rules specifically for GitHub Copilot code generation |
 
