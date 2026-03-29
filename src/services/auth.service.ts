@@ -75,7 +75,7 @@ export class AuthService {
       return { user, restaurant };
     }, { timeout: 15000 });
 
-    await emailService.sendSignupOtp(result.user.email, result.user.name, otp);
+    emailService.sendSignupOtp(result.user.email, result.user.name, otp);
 
     return {
       userId: result.user.id,
@@ -177,7 +177,7 @@ export class AuthService {
       },
     });
 
-    await emailService.sendSignupOtp(user.email, user.name, otp);
+    emailService.sendSignupOtp(user.email, user.name, otp);
     return { sent: true };
   }
 
@@ -301,7 +301,7 @@ export class AuthService {
     });
 
     const resetUrl = `${config.app.frontendUrl.replace(/\/$/, '')}/reset-password?token=${token}`;
-    await emailService.sendPasswordResetEmail(user.email, user.name, resetUrl);
+    emailService.sendPasswordResetEmail(user.email, user.name, resetUrl);
 
     return { sent: true };
   }

@@ -76,7 +76,7 @@ class EmailService {
     }
   }
 
-  async sendSignupOtp(email: string, managerName: string, otp: string) {
+  sendSignupOtp(email: string, managerName: string, otp: string) {
     const subject = 'Verify your manager account (OTP)';
     const text = `Hi ${managerName},\n\nYour HMS signup OTP is ${otp}. It expires in ${config.authFlow.signupOtpTtlMinutes} minutes.\n\nIf you did not request this, ignore this email.`;
     const html = `
@@ -90,10 +90,16 @@ class EmailService {
       </div>
     `;
 
-    await this.send({ to: email, subject, text, html });
+    // Log OTP to console for development/testing
+    console.log(`\n[OTP] Email: ${email} | OTP: ${otp} | Expires: ${config.authFlow.signupOtpTtlMinutes} min\n`);
+
+    // Fire-and-forget: send email asynchronously without blocking the API response
+    this.send({ to: email, subject, text, html }).catch(err => {
+      console.error('[EmailService] sendSignupOtp async error:', err);
+    });
   }
 
-  async sendPasswordResetEmail(email: string, managerName: string, resetUrl: string) {
+  sendPasswordResetEmail(email: string, managerName: string, resetUrl: string) {
     const subject = 'Reset your HMS manager password';
     const text = `Hi ${managerName},\n\nClick this link to reset your password:\n${resetUrl}\n\nThis link expires in ${config.authFlow.passwordResetTtlMinutes} minutes.\n\nIf you did not request this, ignore this email.`;
     const html = `
@@ -110,7 +116,13 @@ class EmailService {
       </div>
     `;
 
-    await this.send({ to: email, subject, text, html });
+    // Log reset URL to console for development/testing
+    console.log(`\n[PASSWORD RESET] Email: ${email} | Reset URL: ${resetUrl} | Expires: ${config.authFlow.passwordResetTtlMinutes} min\n`);
+
+    // Fire-and-forget: send email asynchronously without blocking the API response
+    this.send({ to: email, subject, text, html }).catch(err => {
+      console.error('[EmailService] sendPasswordResetEmail async error:', err);
+    });
   }
 }
 

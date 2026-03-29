@@ -15,6 +15,12 @@ This document summarizes deployment and operations context for HMS.
 - Mobile web: Firebase Hosting
 - Android APK builds: GitHub Actions + Expo EAS
 
+## Observed Live Backend Topology
+- API domain: `api.dppatel.in`
+- DNS target observed: `32.194.111.6`
+- Health headers show: `nginx/1.18.0 (Ubuntu)` and Express response
+- Working model: Nginx reverse proxy on Ubuntu -> backend Node process
+
 ## Critical Deployment Files
 - `HMS--BACKEND/src/config/env.ts`
 - `HMS-deshboard/vercel.json`
@@ -33,6 +39,20 @@ APK workflow uses:
 - `EXPO_TOKEN`
 - `EAS_PROJECT_ID`
 - Firebase service secrets (for web deploy workflow)
+
+## Applying Changes To Live
+
+### Backend (`HMS--BACKEND`)
+1. Commit and push backend code.
+2. SSH to production server.
+3. Pull latest backend code.
+4. Run `npm install` and `npm run build`.
+5. Restart process (`pm2 restart hms-backend` or equivalent).
+6. Verify `https://api.dppatel.in/health` and one business flow endpoint.
+
+### HMS-app (`HMS-app`)
+- APK rollout via `HMS-app/.github/workflows/build-android-apk.yml`.
+- Mobile web rollout via Firebase hosting deployment workflow/process.
 
 ## Operational References
 - Root deployment index: `../../deployment-files/README.md`
