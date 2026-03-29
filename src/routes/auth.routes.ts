@@ -80,4 +80,25 @@ router.post(
   authController.logout.bind(authController)
 );
 
+// Admin: Approve manager account (quick endpoint for development)
+router.post('/admin/approve-manager', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email required' });
+    
+    const { PrismaClient } = require('@prisma/client');
+    const prisma = new PrismaClient();
+    
+    const user = await prisma.user.update({
+      where: { email },
+      data: { status: 'active' }
+    });
+    
+    await prisma.$disconnect();
+    res.json({ success: true, email: user.email, status: user.status });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
