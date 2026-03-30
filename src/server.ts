@@ -61,7 +61,7 @@ const startServer = async () => {
     void connectDatabaseWithRetry();
 
     // Verify SMTP connection (non-blocking, won't prevent server start)
-    const emailService = require('../services/email.service').default;
+    const emailService = require('./services/email.service').default;
     emailService.verifyConnection().catch((err: any) => {
       console.error('[Server] Email service verification error:', err?.message || err);
     });
