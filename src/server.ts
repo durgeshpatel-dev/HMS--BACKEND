@@ -60,6 +60,12 @@ const startServer = async () => {
     // Start DB connection attempts in background so server remains alive
     void connectDatabaseWithRetry();
 
+    // Verify SMTP connection (non-blocking, won't prevent server start)
+    const emailService = require('../services/email.service').default;
+    emailService.verifyConnection().catch((err: any) => {
+      console.error('[Server] Email service verification error:', err?.message || err);
+    });
+
     // Initialize Socket.io
     const { initSocket } = require('./config/socket');
     const io = initSocket(server);

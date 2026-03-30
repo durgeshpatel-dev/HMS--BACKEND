@@ -10,6 +10,7 @@ type MailPayload = {
 
 class EmailService {
   private transporter: nodemailer.Transporter | null = null;
+  private verified = false;
 
   private isPlaceholder(value: string) {
     const normalized = (value || '').trim().toLowerCase();
@@ -39,40 +40,101 @@ class EmailService {
     this.transporter = nodemailer.createTransport({
       host: config.mail.host,
       port: config.mail.port,
-      secure: config.mail.secure,
+      secure: config.mail.secure, // false for port 587
+      requireTLS: config.mail.port === 587, // STARTTLS required for port 587
+      pool: true, // connection pooling for reliability
       auth: {
         user: config.mail.user,
         pass: config.mail.pass,
       },
+      tls: {
+        rejectUnauthorized: true,
+      },
+      // Connection timeouts to avoid hanging
+      connectionTimeout: 10000, // 10s
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
     });
 
     return this.transporter;
+  }
+
+  /**
+   * Verify SMTP connection. Safe to call at startup (non-blocking, non-fatal).
+   * Returns true if SMTP is reachable and credentials are valid.
+   */
+  async verifyConnection(): Promise<boolean> {
+    if (!this.hasSmtpConfig()) {
+      console.warn('[EmailService] SMTP not configured — email features are DISABLED.');
+      console.warn('[EmailService]   SMTP_HOST:', config.mail.host || '(empty)');
+      console.warn('[EmailService]   SMTP_USER:', config.mail.user || '(empty)');
+      return false;
+    }
+
+    const transporter = this.getTransporter();
+    if (!transporter) return false;
+
+    try {
+      await transporter.verify();
+      this.verified = true;
+      console.log('[EmailService] ✅ SMTP connection verified — email features are ACTIVE.');
+      console.log(`[EmailService]   Host: ${config.mail.host}:${config.mail.port}`);
+      console.log(`[EmailService]   From: ${config.mail.from}`);
+      return true;
+    } catch (error: any) {
+      this.verified = false;
+      console.error('[EmailService] ❌ SMTP verification FAILED — emails will NOT be sent.');
+      console.error(`[EmailService]   Host: ${config.mail.host}:${config.mail.port}`);
+      console.error(`[EmailService]   User: ${config.mail.user}`);
+      console.error(`[EmailService]   Error: ${error?.message || error}`);
+      if (error?.code) console.error(`[EmailService]   Code: ${error.code}`);
+      if (error?.responseCode) console.error(`[EmailService]   SMTP Response: ${error.responseCode}`);
+      return false;
+    }
+  }
+
+  /** Check if email service is operational */
+  isReady(): boolean {
+    return this.hasSmtpConfig() && this.verified;
   }
 
   async send(payload: MailPayload): Promise<boolean> {
     const transporter = this.getTransporter();
 
     if (!transporter) {
-      console.warn('[EmailService] SMTP not configured. Email content logged only.', {
+      console.warn('[EmailService] SMTP not configured. Email NOT sent:', {
         to: payload.to,
         subject: payload.subject,
-        text: payload.text,
       });
       return false;
     }
 
     try {
-      await transporter.sendMail({
+      const info = await transporter.sendMail({
         from: config.mail.from,
         to: payload.to,
         subject: payload.subject,
         text: payload.text,
         html: payload.html,
       });
-      console.log('[EmailService] Email sent successfully to:', payload.to);
+      console.log('[EmailService] ✅ Email sent successfully to:', payload.to, '| MessageId:', info.messageId);
       return true;
     } catch (error: any) {
-      console.error('[EmailService] SMTP send failed:', error?.message || error);
+      console.error('[EmailService] ❌ SMTP send FAILED:');
+      console.error(`[EmailService]   To: ${payload.to}`);
+      console.error(`[EmailService]   Subject: ${payload.subject}`);
+      console.error(`[EmailService]   Error: ${error?.message || error}`);
+      if (error?.code) console.error(`[EmailService]   Code: ${error.code}`);
+      if (error?.responseCode) console.error(`[EmailService]   SMTP Response: ${error.responseCode}`);
+      if (error?.command) console.error(`[EmailService]   Failed Command: ${error.command}`);
+
+      // Reset transporter on auth or connection errors so next attempt retries fresh
+      if (error?.code === 'EAUTH' || error?.code === 'ESOCKET' || error?.code === 'ECONNECTION') {
+        this.transporter = null;
+        this.verified = false;
+        console.warn('[EmailService]   Transporter reset due to connection/auth error.');
+      }
+
       return false;
     }
   }

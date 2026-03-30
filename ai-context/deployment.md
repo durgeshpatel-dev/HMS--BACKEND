@@ -1,61 +1,61 @@
-# Deployment Context (Current)
+# Backend Deployment Context (Actual Current Flow)
 
-Last updated: 29 March 2026
+Last updated: 30 March 2026
 
-This document summarizes deployment and operations context for HMS.
+## 1) Production runtime
+- Domain: `https://api.dppatel.in`
+- Infra: Nginx on Ubuntu -> PM2 app `hms-backend` -> Node/Express (`dist/server.js`)
 
-## Live Components
-- Backend API (`HMS--BACKEND`)
-- Dashboard (`HMS-deshboard`)
-- Mobile app + mobile web (`HMS-app`)
+## 2) Canonical deploy script
+- File: `DEPLOY_TO_PRODUCTION.sh` (this repo)
 
-## Deployment Platforms
-- Backend: production API hosting environment
-- Dashboard: Vercel
-- Mobile web: Firebase Hosting
-- Android APK builds: GitHub Actions + Expo EAS
+This script is the source of truth for backend live deployment.
 
-## Observed Live Backend Topology
-- API domain: `api.dppatel.in`
-- DNS target observed: `32.194.111.6`
-- Health headers show: `nginx/1.18.0 (Ubuntu)` and Express response
-- Working model: Nginx reverse proxy on Ubuntu -> backend Node process
+## 3) Script behavior (safe deploy + rollback)
+The script performs:
+1. Auto-detect server app directory (`/home/ubuntu/HMS--BACKEND`, `/home/hms/HMS--BACKEND`, etc.)
+2. Single-deploy lock using `/tmp/hms-backend.deploy.lock`
+3. Backup metadata at `.deploy-backups/<timestamp>/` including previous commit + `.env` snapshot
+4. `git fetch --prune origin`
+5. Compare current commit vs `origin/main`
+6. If changed:
+	- `git reset --hard origin/main`
+	- `npm ci` (fallback `npm install`)
+	- `npm run build`
+	- `npm run prisma:migrate:deploy --if-present`
+	- `pm2 restart hms-backend --update-env` (or start if absent)
+	- health checks with retries on `http://127.0.0.1:5000/health`
+7. On any failure: automatic rollback to previous commit with reinstall, rebuild, restart, and health verification
 
-## Critical Deployment Files
-- `HMS--BACKEND/src/config/env.ts`
-- `HMS-deshboard/vercel.json`
-- `HMS-app/app.config.js`
-- `HMS-app/eas.json`
-- `HMS-app/.github/workflows/build-android-apk.yml`
+## 4) Required npm scripts
+- `build`: `tsc`
+- `prisma:migrate:deploy`: `prisma migrate deploy`
 
-## CI/CD Notes
-APK workflow uses:
-1. clean npm install
-2. EAS JSON build output
-3. `jq` extraction for `build_id` and `artifact_url`
-4. shell writes to `$GITHUB_OUTPUT`
+## 5) How to run deploy from local workstation
+Run directly with SSH + SCP:
 
-## Required Secrets
-- `EXPO_TOKEN`
-- `EAS_PROJECT_ID`
-- Firebase service secrets (for web deploy workflow)
+1. Upload script
+	- `scp -i ~/Downloads/hms-key.pem DEPLOY_TO_PRODUCTION.sh ubuntu@32.194.111.6:/tmp/DEPLOY_TO_PRODUCTION.sh`
+2. Execute remotely
+	- `ssh -i ~/Downloads/hms-key.pem ubuntu@32.194.111.6 "chmod +x /tmp/DEPLOY_TO_PRODUCTION.sh && /tmp/DEPLOY_TO_PRODUCTION.sh"`
 
-## Applying Changes To Live
+## 6) Stability properties
+- Prevents concurrent deploy overlap
+- Avoids partial rollout state
+- Rolls back automatically on failure
+- Preserves current live behavior if deploy fails
 
-### Backend (`HMS--BACKEND`)
-1. Commit and push backend code.
-2. SSH to production server.
-3. Pull latest backend code.
-4. Run `npm install` and `npm run build`.
-5. Restart process (`pm2 restart hms-backend` or equivalent).
-6. Verify `https://api.dppatel.in/health` and one business flow endpoint.
+## 7) Known failure mode to watch
+Observed incident: SSH banner timeout (`Connection timed out during banner exchange`) and API timeouts at same time.
 
-### HMS-app (`HMS-app`)
-- APK rollout via `HMS-app/.github/workflows/build-android-apk.yml`.
-- Mobile web rollout via Firebase hosting deployment workflow/process.
+Meaning: infra/host/network issue, not code-level deploy step error. Recover host access first, then re-run deploy.
 
-## Operational References
-- Root deployment index: `../../deployment-files/README.md`
-- Agent handoff: `../../deployment-files/AGENT_HANDOFF_CONTEXT.md`
-- Troubleshooting: `../../deployment-files/TROUBLESHOOTING.md`
-- Change/release checklist: `../../deployment-files/CHANGE_AND_RELEASE_PROCESS.md`
+## 8) Post-deploy checks
+1. `pm2 status` shows `hms-backend` online
+2. `curl https://api.dppatel.in/health`
+3. One auth API check (e.g., forgot-password)
+4. `pm2 logs hms-backend --lines 50` has no crash loop
+
+## 9) Related docs
+- `../../deployment-files/CHANGE_AND_RELEASE_PROCESS.md`
+- `../../deployment-files/TROUBLESHOOTING.md`

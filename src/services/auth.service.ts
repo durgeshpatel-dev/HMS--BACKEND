@@ -303,6 +303,10 @@ export class AuthService {
     const resetUrl = `${config.app.frontendUrl.replace(/\/$/, '')}/reset-password?token=${token}`;
     const sent = await emailService.sendPasswordResetEmail(user.email, user.name, resetUrl);
 
+    if (!sent) {
+      console.warn(`[AuthService] ⚠️ Password reset email FAILED for ${user.email}. Check SMTP config and PM2 logs.`);
+    }
+
     return { sent };
   }
 

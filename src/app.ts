@@ -38,6 +38,23 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Email health check endpoint (manager-only diagnostic)
+app.get('/health/email', async (req, res) => {
+  const emailService = require('./services/email.service').default;
+  const smtpOk = await emailService.verifyConnection();
+
+  res.json({
+    success: true,
+    smtp: {
+      configured: true,
+      connected: smtpOk,
+      host: config.mail.host,
+      port: config.mail.port,
+      user: config.mail.user ? `${config.mail.user.slice(0, 4)}***` : '(not set)',
+    },
+  });
+});
+
 // Root endpoint (production-friendly API landing response)
 app.get('/', (req: Request, res: Response) => {
   res.json({

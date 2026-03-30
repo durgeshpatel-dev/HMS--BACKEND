@@ -127,27 +127,30 @@ fi
 echo "🔁 Step 3/8: Checkout target commit"
 git reset --hard "origin/${BRANCH}"
 
-echo "📦 Step 4/8: Install dependencies"
+echo "📦 Step 4/9: Install dependencies"
 if [[ -f package-lock.json ]]; then
     npm ci
 else
     npm install
 fi
 
-echo "🔨 Step 5/8: Build application"
+echo "🧬 Step 5/9: Generate Prisma client"
+npx prisma generate
+
+echo "🔨 Step 6/9: Build application"
 npm run build
 
-echo "🗄️  Step 6/8: Run DB migration (if present)"
+echo "🗄️  Step 7/9: Run DB migration (if present)"
 npm run prisma:migrate:deploy --if-present
 
-echo "🔄 Step 7/8: Restart backend"
+echo "🔄 Step 8/9: Restart backend"
 if pm2 describe "${PM2_APP}" >/dev/null 2>&1; then
     pm2 restart "${PM2_APP}" --update-env
 else
     pm2 start ecosystem.config.js --only "${PM2_APP}" --update-env
 fi
 
-echo "🏥 Step 8/8: Health check"
+echo "🏥 Step 9/9: Health check"
 for i in {1..12}; do
     if curl -fsS --max-time 8 "${HEALTH_URL}" >/dev/null 2>&1; then
         break
@@ -159,6 +162,10 @@ curl -fsS --max-time 8 "${HEALTH_URL}" >/dev/null
 
 trap - ERR
 
+# Audit log
+DEPLOY_LOG="${APP_DIR}/.deploy-history.log"
+echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] ${PREV_COMMIT} -> ${TARGET_COMMIT} | status=SUCCESS" >> "${DEPLOY_LOG}"
+
 echo ""
 echo "╔════════════════════════════════════════════════════════════╗"
 echo "║                 ✅ Deployment Successful                  ║"
@@ -169,3 +176,4 @@ echo "   • Previous commit: ${PREV_COMMIT}"
 echo "   • Current commit : ${TARGET_COMMIT}"
 echo "   • PM2 app        : ${PM2_APP}"
 echo "   • Health check   : PASSED"
+echo "   • Audit log      : ${DEPLOY_LOG}"
