@@ -80,6 +80,9 @@ rollback() {
         npm install
     fi
 
+    echo "🧬 Regenerating Prisma client for rollback build"
+    npx prisma generate
+
     npm run build
 
     if pm2 describe "${PM2_APP}" >/dev/null 2>&1; then
@@ -141,7 +144,11 @@ echo "🔨 Step 6/9: Build application"
 npm run build
 
 echo "🗄️  Step 7/9: Run DB migration (if present)"
-npm run prisma:migrate:deploy --if-present
+if [[ -d prisma/migrations ]] && [[ -n "$(find prisma/migrations -mindepth 1 -maxdepth 1 -type d 2>/dev/null)" ]]; then
+    npm run prisma:migrate:deploy --if-present
+else
+    echo "ℹ️ No Prisma migrations directory entries found; skipping migrate deploy."
+fi
 
 echo "🔄 Step 8/9: Restart backend"
 if pm2 describe "${PM2_APP}" >/dev/null 2>&1; then

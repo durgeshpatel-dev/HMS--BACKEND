@@ -18,10 +18,13 @@ export class AuthController {
     try {
       const data: ManagerSignupInput = req.body;
       const result = await authService.managerSignup(data);
+      const message = result.otpSent === false
+        ? 'Account created, but OTP email could not be sent. Please try resend OTP or contact support.'
+        : 'Account created. Verify OTP sent to your email, then wait for admin approval.';
       return sendSuccess(
         res,
         result,
-        'Account created. Verify OTP sent to your email, then wait for admin approval.',
+        message,
         201
       );
     } catch (error: any) {
@@ -74,7 +77,10 @@ export class AuthController {
     try {
       const data: ResendSignupOtpInput = req.body;
       const result = await authService.resendSignupOtp(data);
-      return sendSuccess(res, result, 'If eligible, a new OTP has been sent', 200);
+      const message = result.sent === false
+        ? 'We could not send OTP right now. Please try again in a minute.'
+        : 'If eligible, a new OTP has been sent';
+      return sendSuccess(res, result, message, 200);
     } catch (error: any) {
       return next(error);
     }

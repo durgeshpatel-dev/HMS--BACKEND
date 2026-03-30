@@ -27,6 +27,11 @@ The script performs:
 	- health checks with retries on `http://127.0.0.1:5000/health`
 7. On any failure: automatic rollback to previous commit with reinstall, rebuild, restart, and health verification
 
+### 3.1) Hardening notes (30 March 2026 incident fix)
+- Rollback path now runs `npx prisma generate` before `npm run build`.
+- Migration deploy now runs only when migration directories exist under `prisma/migrations/`.
+- This avoids `P3005` baseline DB failures from blocking otherwise healthy code deploys.
+
 ## 4) Required npm scripts
 - `build`: `tsc`
 - `prisma:migrate:deploy`: `prisma migrate deploy`

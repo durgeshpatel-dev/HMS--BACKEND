@@ -75,7 +75,10 @@ export class AuthService {
       return { user, restaurant };
     }, { timeout: 15000 });
 
-    emailService.sendSignupOtp(result.user.email, result.user.name, otp);
+    const otpSent = await emailService.sendSignupOtp(result.user.email, result.user.name, otp);
+    if (!otpSent) {
+      console.warn(`[AuthService] ⚠️ Signup OTP email FAILED for ${result.user.email}. Check SMTP config and PM2 logs.`);
+    }
 
     return {
       userId: result.user.id,
@@ -85,6 +88,7 @@ export class AuthService {
       restaurantId: result.restaurant.id,
       restaurantName: result.restaurant.name,
       verificationRequired: true,
+      otpSent,
     };
   }
 
@@ -177,8 +181,11 @@ export class AuthService {
       },
     });
 
-    emailService.sendSignupOtp(user.email, user.name, otp);
-    return { sent: true };
+    const sent = await emailService.sendSignupOtp(user.email, user.name, otp);
+    if (!sent) {
+      console.warn(`[AuthService] ⚠️ Resend signup OTP email FAILED for ${user.email}. Check SMTP config and PM2 logs.`);
+    }
+    return { sent };
   }
 
   // Manager Login
