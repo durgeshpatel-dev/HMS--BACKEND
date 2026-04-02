@@ -19,14 +19,80 @@ const generateSixDigitOtp = () => `${Math.floor(100000 + Math.random() * 900000)
 const MAX_OTP_ATTEMPTS = 5;
 
 export class AuthService {
+  private async deleteManagerUserAndMaybeRestaurant(userId: number, restaurantId: number) {
+    await prisma.$transaction(async (tx) => {
+      await tx.user.delete({
+        where: { id: userId },
+      });
+
+      const [usersCount, staffCount, ordersCount, tablesCount, categoriesCount, menuItemsCount] = await Promise.all([
+        tx.user.count({ where: { restaurantId } }),
+        tx.staff.count({ where: { restaurantId } }),
+        tx.order.count({ where: { restaurantId } }),
+        tx.table.count({ where: { restaurantId } }),
+        tx.category.count({ where: { restaurantId } }),
+        tx.menuItem.count({ where: { restaurantId } }),
+      ]);
+
+      if (
+        usersCount === 0 &&
+        staffCount === 0 &&
+        ordersCount === 0 &&
+        tablesCount === 0 &&
+        categoriesCount === 0 &&
+        menuItemsCount === 0
+      ) {
+        await tx.restaurant.delete({
+          where: { id: restaurantId },
+        });
+      }
+    }, { timeout: 15000 });
+  }
+
+  private async cleanupExpiredUnverifiedManagerSignups() {
+    const expiredUsers = await prisma.user.findMany({
+      where: {
+        role: 'manager',
+        status: 'pending_approval',
+        otpVerification: {
+          is: {
+            verifiedAt: null,
+            expiresAt: { lt: new Date() },
+          },
+        },
+      },
+      select: {
+        id: true,
+        restaurantId: true,
+      },
+    });
+
+    for (const user of expiredUsers) {
+      await this.deleteManagerUserAndMaybeRestaurant(user.id, user.restaurantId);
+    }
+  }
+
   // Manager Signup
   async managerSignup(data: ManagerSignupInput) {
+    await this.cleanupExpiredUnverifiedManagerSignups();
+
     // Check if email already exists
     const existingUser = await prisma.user.findUnique({
       where: { email: data.email },
+      include: {
+        otpVerification: true,
+      },
     });
 
     if (existingUser) {
+      if (
+        existingUser.role === 'manager' &&
+        existingUser.status === 'pending_approval' &&
+        existingUser.otpVerification &&
+        !existingUser.otpVerification.verifiedAt
+      ) {
+        throw new Error('Signup already started. Please verify OTP or use resend OTP');
+      }
       throw new Error('Email already exists');
     }
 
@@ -115,7 +181,8 @@ export class AuthService {
     }
 
     if (verification.expiresAt.getTime() < Date.now()) {
-      throw new Error('OTP has expired. Please request a new OTP');
+      await this.deleteManagerUserAndMaybeRestaurant(user.id, user.restaurantId);
+      throw new Error('OTP has expired. Please sign up again');
     }
 
     const isValid = hashValue(data.otp) === verification.otpHash;
@@ -141,6 +208,8 @@ export class AuthService {
   }
 
   async resendSignupOtp(data: ResendSignupOtpInput) {
+    await this.cleanupExpiredUnverifiedManagerSignups();
+
     const user = await prisma.user.findUnique({
       where: { email: data.email },
       include: {
@@ -159,6 +228,11 @@ export class AuthService {
 
     if (user.otpVerification?.verifiedAt) {
       return { sent: false, alreadyVerified: true };
+    }
+
+    if (user.otpVerification && user.otpVerification.expiresAt.getTime() < Date.now()) {
+      await this.deleteManagerUserAndMaybeRestaurant(user.id, user.restaurantId);
+      return { sent: false, signupExpired: true };
     }
 
     const otp = generateSixDigitOtp();
@@ -190,6 +264,8 @@ export class AuthService {
 
   // Manager Login
   async managerLogin(data: ManagerLoginInput) {
+    await this.cleanupExpiredUnverifiedManagerSignups();
+
     // Find user by email
     const user = await prisma.user.findUnique({
       where: { email: data.email },
@@ -279,13 +355,26 @@ export class AuthService {
   }
 
   async forgotPassword(data: ForgotPasswordInput) {
+    await this.cleanupExpiredUnverifiedManagerSignups();
+
     const user = await prisma.user.findUnique({
       where: { email: data.email },
+      include: {
+        otpVerification: {
+          select: {
+            verifiedAt: true,
+          },
+        },
+      },
     });
 
     // Do not reveal account existence
     if (!user || user.role !== 'manager') {
       return { sent: true };
+    }
+
+    if (user.otpVerification && !user.otpVerification.verifiedAt) {
+      return { sent: false, otpNotVerified: true };
     }
 
     const token = crypto.randomBytes(32).toString('hex');
@@ -323,12 +412,24 @@ export class AuthService {
     const request = await prisma.userPasswordReset.findUnique({
       where: { tokenHash },
       include: {
-        user: true,
+        user: {
+          include: {
+            otpVerification: {
+              select: {
+                verifiedAt: true,
+              },
+            },
+          },
+        },
       },
     });
 
     if (!request || request.consumedAt || request.expiresAt.getTime() < Date.now()) {
       throw new Error('Invalid or expired reset link');
+    }
+
+    if (request.user.otpVerification && !request.user.otpVerification.verifiedAt) {
+      throw new Error('Please verify your email with OTP before resetting password');
     }
 
     const passwordHash = await hashPassword(data.newPassword);

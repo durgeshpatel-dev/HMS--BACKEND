@@ -28,7 +28,10 @@ export class AuthController {
         201
       );
     } catch (error: any) {
-      if (error.message === 'Email already exists') {
+      if (
+        error.message === 'Email already exists' ||
+        error.message === 'Signup already started. Please verify OTP or use resend OTP'
+      ) {
         return sendError(res, error.message, 400);
       }
       return next(error);
@@ -64,7 +67,7 @@ export class AuthController {
       if (
         error.message === 'Invalid OTP request' ||
         error.message === 'Invalid OTP' ||
-        error.message === 'OTP has expired. Please request a new OTP' ||
+        error.message === 'OTP has expired. Please sign up again' ||
         error.message === 'Too many invalid OTP attempts. Please request a new OTP'
       ) {
         return sendError(res, error.message, 400);
@@ -77,9 +80,11 @@ export class AuthController {
     try {
       const data: ResendSignupOtpInput = req.body;
       const result = await authService.resendSignupOtp(data);
-      const message = result.sent === false
-        ? 'We could not send OTP right now. Please try again in a minute.'
-        : 'If eligible, a new OTP has been sent';
+      const message = result.signupExpired
+        ? 'Signup session expired. Please sign up again.'
+        : result.sent === false
+          ? 'We could not send OTP right now. Please try again in a minute.'
+          : 'If eligible, a new OTP has been sent';
       return sendSuccess(res, result, message, 200);
     } catch (error: any) {
       return next(error);
@@ -125,7 +130,10 @@ export class AuthController {
     try {
       const data: ForgotPasswordInput = req.body;
       const result = await authService.forgotPassword(data);
-      return sendSuccess(res, result, 'If that email exists, a reset link has been sent', 200);
+      const message = result.otpNotVerified
+        ? 'Please verify your email with OTP before requesting password reset'
+        : 'If that email exists, a reset link has been sent';
+      return sendSuccess(res, result, message, 200);
     } catch (error: any) {
       return next(error);
     }
@@ -137,7 +145,10 @@ export class AuthController {
       const result = await authService.resetPassword(data);
       return sendSuccess(res, result, 'Password reset successful', 200);
     } catch (error: any) {
-      if (error.message === 'Invalid or expired reset link') {
+      if (
+        error.message === 'Invalid or expired reset link' ||
+        error.message === 'Please verify your email with OTP before resetting password'
+      ) {
         return sendError(res, error.message, 400);
       }
       return next(error);
