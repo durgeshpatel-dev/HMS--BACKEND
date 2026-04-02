@@ -34,6 +34,7 @@ router.put(
 
 router.patch(
   '/:id/status',
+  requireRole(['waiter', 'manager', 'super_admin']),
   validate(updateTableStatusSchema),
   tableController.updateTableStatus
 );

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { requireAuth } from '../middleware/auth.middleware';
+import { requireAuth, requireRole } from '../middleware/auth.middleware';
 import { sendSuccess, sendError } from '../utils/response.util';
 import config from '../config/env';
 
@@ -45,52 +45,57 @@ const upload = multer({
 // All upload routes require authentication
 router.use(requireAuth);
 
-/**
- * POST /upload — Upload a single image file
- * Returns the URL of the uploaded file
- */
-router.post('/', upload.single('file'), (req, res) => {
-  try {
-    if (!req.file) {
-      return sendError(res, 'No file provided', 400);
+router.post(
+  '/',
+  requireRole(['manager', 'super_admin']),
+  upload.single('file'),
+  (req, res) => {
+    try {
+      if (!req.file) {
+        return sendError(res, 'No file provided', 400);
+      }
+
+      // Build a publicly-accessible URL for the file
+      const fileUrl = `/uploads/${req.file.filename}`;
+
+      return sendSuccess(res, { fileUrl, url: fileUrl }, 'File uploaded successfully', 201);
+    } catch (error: any) {
+      return sendError(res, error.message || 'Upload failed', 400);
     }
-
-    // Build a publicly-accessible URL for the file
-    const fileUrl = `/uploads/${req.file.filename}`;
-
-    return sendSuccess(res, { fileUrl, url: fileUrl }, 'File uploaded successfully', 201);
-  } catch (error: any) {
-    return sendError(res, error.message || 'Upload failed', 400);
   }
-});
+);
 
 /**
  * DELETE /upload — Delete an uploaded file
  */
-router.delete('/', (req, res) => {
-  try {
-    const { fileUrl } = req.body;
-    if (!fileUrl || typeof fileUrl !== 'string') {
-      return sendError(res, 'fileUrl is required', 400);
+router.delete(
+  '/',
+  requireRole(['manager', 'super_admin']),
+  (req, res) => {
+    try {
+      const { fileUrl } = req.body;
+      if (!fileUrl || typeof fileUrl !== 'string') {
+        return sendError(res, 'fileUrl is required', 400);
+      }
+
+      // Extract filename from URL and resolve full path
+      const filename = path.basename(fileUrl);
+      const filePath = path.join(uploadDir, filename);
+
+      // Security: ensure the resolved path is inside uploadDir
+      if (!filePath.startsWith(uploadDir)) {
+        return sendError(res, 'Invalid file path', 400);
+      }
+
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+
+      return sendSuccess(res, null, 'File deleted successfully');
+    } catch (error: any) {
+      return sendError(res, error.message || 'Delete failed', 400);
     }
-
-    // Extract filename from URL and resolve full path
-    const filename = path.basename(fileUrl);
-    const filePath = path.join(uploadDir, filename);
-
-    // Security: ensure the resolved path is inside uploadDir
-    if (!filePath.startsWith(uploadDir)) {
-      return sendError(res, 'Invalid file path', 400);
-    }
-
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-    }
-
-    return sendSuccess(res, null, 'File deleted successfully');
-  } catch (error: any) {
-    return sendError(res, error.message || 'Delete failed', 400);
   }
-});
+);
 
 export default router;

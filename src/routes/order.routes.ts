@@ -32,6 +32,7 @@ router.post(
 
 router.put(
   '/:id',
+  requireRole(['waiter', 'cook', 'manager', 'super_admin']),
   validate(updateOrderSchema),
   orderController.updateOrder
 );
@@ -45,6 +46,7 @@ router.post(
 
 router.put(
   '/:orderId/items/:itemId',
+  requireRole(['waiter', 'manager', 'super_admin']),
   validate(updateOrderItemSchema),
   orderController.updateOrderItem
 );

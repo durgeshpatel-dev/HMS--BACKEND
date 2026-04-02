@@ -1,18 +1,16 @@
-import express, { Application, Request, Response, NextFunction } from 'express';
+import express, { Application } from 'express';
 import path from 'path';
 import { corsMiddleware } from './middleware/cors.middleware';
 // import { rateLimiter } from './middleware/rateLimit.middleware';
 import { errorHandler, notFoundHandler } from './middleware/error.middleware';
+import { attachRequestContext } from './middleware/requestContext.middleware';
 import config from './config/env';
 import routes from './routes';
 
 const app: Application = express();
 
-// Request logging
-app.use((req: Request, res: Response, next: NextFunction) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-  next();
-});
+// Request context + structured request completion logging
+app.use(attachRequestContext);
 
 // Middleware
 app.use(corsMiddleware);
@@ -26,13 +24,13 @@ app.use('/uploads', express.static(path.resolve('./uploads')));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  console.log('Health check endpoint hit');
   const dbConnected = Boolean(req.app.locals?.dbConnected);
 
   res.json({
     success: true,
     message: 'Restaurant HMS Backend API is running',
     timestamp: new Date().toISOString(),
+    requestId: req.requestId,
     environment: config.nodeEnv,
     database: dbConnected ? 'connected' : 'connecting_or_unavailable',
   });
@@ -56,7 +54,7 @@ app.get('/health/email', async (req, res) => {
 });
 
 // Root endpoint (production-friendly API landing response)
-app.get('/', (req: Request, res: Response) => {
+app.get('/', (_req, res) => {
   res.json({
     service: 'Restaurant HMS Backend API',
     status: 'running',

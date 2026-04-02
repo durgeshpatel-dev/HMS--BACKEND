@@ -39,6 +39,7 @@ package-lock.json
 # Build output
 dist/
 build/
+reports/
 
 # Environment files
 .env

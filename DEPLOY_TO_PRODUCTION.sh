@@ -67,8 +67,15 @@ fi
 cd "${APP_DIR}"
 
 PREV_COMMIT="$(git rev-parse --short HEAD)"
+ROLLBACK_DONE="0"
 
 rollback() {
+    if [[ "${ROLLBACK_DONE}" == "1" ]]; then
+        return 0
+    fi
+    ROLLBACK_DONE="1"
+    trap - ERR INT TERM HUP
+
     echo ""
     echo "🛑 Deployment failed. Starting rollback to ${PREV_COMMIT}..."
 
@@ -100,7 +107,15 @@ rollback() {
     fi
 }
 
+handle_interrupt() {
+    echo ""
+    echo "⚠️ Deployment interrupted (signal received)."
+    rollback
+    exit 1
+}
+
 trap rollback ERR
+trap handle_interrupt INT TERM HUP
 
 echo "📂 App directory: ${APP_DIR}"
 echo "🌿 Branch: ${BRANCH}"
@@ -167,7 +182,7 @@ done
 
 curl -fsS --max-time 8 "${HEALTH_URL}" >/dev/null
 
-trap - ERR
+trap - ERR INT TERM HUP
 
 # Audit log
 DEPLOY_LOG="${APP_DIR}/.deploy-history.log"

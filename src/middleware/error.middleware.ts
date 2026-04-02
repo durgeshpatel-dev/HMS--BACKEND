@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { sendError } from '../utils/response.util';
+import { logger } from '../utils/logger.util';
 
 interface CustomError extends Error {
   statusCode?: number;
@@ -9,9 +10,10 @@ export const errorHandler = (
   err: CustomError,
   req: Request,
   res: Response,
-  next: NextFunction
+  _next: NextFunction
 ): Response => {
-  console.error('Error:', {
+  logger.error('request.failed', {
+    requestId: req.requestId,
     message: err.message,
     statusCode: err.statusCode,
     path: req.originalUrl,
