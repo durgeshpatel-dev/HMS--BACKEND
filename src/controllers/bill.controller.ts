@@ -10,92 +10,86 @@ import { getErrorStatusCode } from '../utils/errors.util';
 import { createBillShareToken, verifyBillShareToken } from '../utils/billShare.util';
 import type { GenerateBillInput, RecordPaymentInput } from '../validators/bill.validator';
 
-class BillController {
-  constructor() {
-    this.getBills = this.getBills.bind(this);
-    this.getBillById = this.getBillById.bind(this);
-    this.getBillByOrderId = this.getBillByOrderId.bind(this);
-    this.generateBill = this.generateBill.bind(this);
-    this.recordPayment = this.recordPayment.bind(this);
-    this.createShareLink = this.createShareLink.bind(this);
-    this.downloadBillPdf = this.downloadBillPdf.bind(this);
+// Standalone helpers (not class methods) so Express route handlers don't lose `this` context
+function getBaseUrl(req: Request) {
+  if (config.app.publicApiUrl) return config.app.publicApiUrl.replace(/\/$/, '');
+  const proto = (req.headers['x-forwarded-proto'] as string) || req.protocol;
+  const host = req.get('host');
+  return `${proto}://${host}`;
+}
+
+function buildBillPdf(res: Response, bill: any, restaurant: any, orders: any[]) {
+  const doc = new PDFDocument({ size: 'A4', margin: 40 });
+  const fileName = `bill-${bill.billNumber || bill.id}.pdf`;
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+
+  doc.pipe(res);
+
+  const settings = restaurant?.settings || {};
+  const taxPercentage = settings.taxPercentage ?? settings.tax_percentage ?? 5;
+  const gstNumber = settings.gstNumber || settings.gst_number || '';
+
+  doc.fontSize(18).text(restaurant?.name || 'Restaurant HMS', { align: 'center' });
+  if (restaurant?.address) doc.fontSize(10).text(restaurant.address, { align: 'center' });
+  if (restaurant?.phone) doc.fontSize(10).text(restaurant.phone, { align: 'center' });
+  if (gstNumber) doc.fontSize(10).text(`GSTIN: ${gstNumber}`, { align: 'center' });
+
+  doc.moveDown();
+  doc.fontSize(12).text(`Bill #: ${bill.billNumber || 'N/A'}`);
+  if (bill?.order?.table?.tableNumber) {
+    doc.text(`Table: ${bill.order.table.tableNumber}`);
   }
+  doc.text(`Date: ${new Date(bill.createdAt || Date.now()).toLocaleString('en-IN')}`);
 
-  private getBaseUrl(req: Request) {
-    if (config.app.publicApiUrl) return config.app.publicApiUrl.replace(/\/$/, '');
-    const proto = (req.headers['x-forwarded-proto'] as string) || req.protocol;
-    const host = req.get('host');
-    return `${proto}://${host}`;
-  }
+  doc.moveDown();
+  doc.fontSize(12).text('Items', { underline: true });
 
-  private buildBillPdf(res: Response, bill: any, restaurant: any, orders: any[]) {
-    const doc = new PDFDocument({ size: 'A4', margin: 40 });
-    const fileName = `bill-${bill.billNumber || bill.id}.pdf`;
-
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-
-    doc.pipe(res);
-
-    const settings = restaurant?.settings || {};
-    const taxPercentage = settings.taxPercentage ?? settings.tax_percentage ?? 5;
-    const gstNumber = settings.gstNumber || settings.gst_number || '';
-
-    doc.fontSize(18).text(restaurant?.name || 'Restaurant HMS', { align: 'center' });
-    if (restaurant?.address) doc.fontSize(10).text(restaurant.address, { align: 'center' });
-    if (restaurant?.phone) doc.fontSize(10).text(restaurant.phone, { align: 'center' });
-    if (gstNumber) doc.fontSize(10).text(`GSTIN: ${gstNumber}`, { align: 'center' });
-
-    doc.moveDown();
-    doc.fontSize(12).text(`Bill #: ${bill.billNumber || 'N/A'}`);
-    if (bill?.order?.table?.tableNumber) {
-      doc.text(`Table: ${bill.order.table.tableNumber}`);
-    }
-    doc.text(`Date: ${new Date(bill.createdAt || Date.now()).toLocaleString('en-IN')}`);
-
-    doc.moveDown();
-    doc.fontSize(12).text('Items', { underline: true });
-
-    const combinedItems = new Map<string, any>();
-    for (const order of orders) {
-      for (const item of order.items || []) {
-        const key = String(item.menuItem?.id || item.menuItemId || item.id);
-        const existing = combinedItems.get(key);
-        if (existing) {
-          combinedItems.set(key, {
-            ...existing,
-            quantity: existing.quantity + item.quantity,
-            subtotal: Number(existing.subtotal) + Number(item.subtotal),
-          });
-        } else {
-          combinedItems.set(key, { ...item });
-        }
+  const combinedItems = new Map<string, any>();
+  for (const order of orders) {
+    for (const item of order.items || []) {
+      const key = String(item.menuItem?.id || item.menuItemId || item.id);
+      const existing = combinedItems.get(key);
+      if (existing) {
+        combinedItems.set(key, {
+          ...existing,
+          quantity: existing.quantity + item.quantity,
+          subtotal: Number(existing.subtotal) + Number(item.subtotal),
+        });
+      } else {
+        combinedItems.set(key, { ...item });
       }
     }
-
-    for (const item of combinedItems.values()) {
-      const name = item.menuItem?.name || 'Item';
-      doc.fontSize(10).text(`${name}  x${item.quantity}  ₹${Number(item.subtotal).toFixed(2)}`);
-    }
-
-    doc.moveDown();
-    doc.fontSize(12).text('Totals', { underline: true });
-    doc.fontSize(10).text(`Subtotal: ₹${Number(bill.subtotal || 0).toFixed(2)}`);
-    doc.fontSize(10).text(`Tax (${taxPercentage}%): ₹${Number(bill.taxAmount || 0).toFixed(2)}`);
-    if (Number(bill.discountAmount || 0) > 0) {
-      doc.text(`Discount: -₹${Number(bill.discountAmount).toFixed(2)}`);
-    }
-    if (Number(bill.extraCharges || 0) > 0) {
-      doc.text(`Extra Charges: ₹${Number(bill.extraCharges).toFixed(2)}`);
-    }
-    doc.fontSize(12).text(`Grand Total: ₹${Number(bill.totalAmount || 0).toFixed(2)}`);
-
-    doc.moveDown();
-    doc.fontSize(10).text('*** Thank You for Visiting ***', { align: 'center' });
-    doc.fontSize(10).text('Please Come Again!', { align: 'center' });
-
-    doc.end();
   }
+
+  for (const item of combinedItems.values()) {
+    const name = item.menuItem?.name || 'Item';
+    doc.fontSize(10).text(`${name}  x${item.quantity}  ₹${Number(item.subtotal).toFixed(2)}`);
+  }
+
+  doc.moveDown();
+  doc.fontSize(12).text('Totals', { underline: true });
+  doc.fontSize(10).text(`Subtotal: ₹${Number(bill.subtotal || 0).toFixed(2)}`);
+  doc.fontSize(10).text(`Tax (${taxPercentage}%): ₹${Number(bill.taxAmount || 0).toFixed(2)}`);
+  if (Number(bill.discountAmount || 0) > 0) {
+    doc.text(`Discount: -₹${Number(bill.discountAmount).toFixed(2)}`);
+  }
+  if (Number(bill.extraCharges || 0) > 0) {
+    doc.text(`Extra Charges: ₹${Number(bill.extraCharges).toFixed(2)}`);
+  }
+  doc.fontSize(12).text(`Grand Total: ₹${Number(bill.totalAmount || 0).toFixed(2)}`);
+
+  doc.moveDown();
+  doc.fontSize(10).text('*** Thank You for Visiting ***', { align: 'center' });
+  doc.fontSize(10).text('Please Come Again!', { align: 'center' });
+
+  doc.end();
+}
+
+class BillController {
+
+  // buildBillPdf and getBaseUrl moved to module-level standalone functions above
   async getBills(req: Request, res: Response) {
     try {
       const user = (req as any).user;
@@ -190,7 +184,7 @@ class BillController {
         exp: expiresAt,
       });
 
-      const baseUrl = this.getBaseUrl(req);
+      const baseUrl = getBaseUrl(req);
       const url = `${baseUrl}/api/v1/bills/${billId}/download?token=${encodeURIComponent(token)}`;
 
       return sendSuccess(res, { url, expiresAt, billNumber: bill.billNumber }, 'Share link created');
@@ -233,7 +227,7 @@ class BillController {
         });
       }
 
-      this.buildBillPdf(res, bill, restaurant, orders);
+      buildBillPdf(res, bill, restaurant, orders);
     } catch (error: any) {
       return sendError(res, error.message, getErrorStatusCode(error, 500));
     }
