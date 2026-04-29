@@ -41,6 +41,12 @@ export const recordPaymentSchema = z.object({
   }),
 });
 
+export const shareBillLinkSchema = z.object({
+  params: z.object({
+    id: z.string().regex(/^\d+$/, 'Invalid bill ID'),
+  }),
+});
+
 export type ListBillsInput = z.infer<typeof listBillsSchema>['query'];
 export type GenerateBillInput = z.infer<typeof generateBillSchema>['body'] & {
   discountPercentage?: number;

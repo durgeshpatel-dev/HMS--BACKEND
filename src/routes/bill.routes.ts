@@ -8,6 +8,7 @@ import {
   getBillSchema,
   listBillsSchema,
   recordPaymentSchema,
+  shareBillLinkSchema,
 } from '../validators/bill.validator';
 
 const router = Router();
@@ -30,6 +31,13 @@ router.post(
   requireRole(['manager', 'waiter']),
   validate(recordPaymentSchema),
   billController.recordPayment
+);
+
+router.post(
+  '/:id/share-link',
+  requireRole(['manager', 'super_admin']),
+  validate(shareBillLinkSchema),
+  billController.createShareLink
 );
 
 export default router;

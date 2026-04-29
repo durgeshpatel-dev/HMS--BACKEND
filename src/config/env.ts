@@ -26,6 +26,8 @@ interface Config {
   };
   app: {
     frontendUrl: string;
+    publicApiUrl: string;
+    billShareSecret: string;
   };
   mail: {
     host: string;
@@ -76,6 +78,8 @@ const config: Config = {
   },
   app: {
     frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
+    publicApiUrl: process.env.PUBLIC_API_BASE_URL || '',
+    billShareSecret: process.env.BILL_SHARE_SECRET || '',
   },
   mail: {
     host: process.env.SMTP_HOST || '',
