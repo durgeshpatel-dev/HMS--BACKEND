@@ -11,6 +11,7 @@ import type {
   ForgotPasswordInput,
   ResetPasswordInput,
 } from '../validators/auth.validator';
+import { getErrorStatusCode } from '../utils/errors.util';
 
 export class AuthController {
   // Manager Signup
@@ -28,13 +29,17 @@ export class AuthController {
         201
       );
     } catch (error: any) {
-      if (
-        error.message === 'Email already exists' ||
-        error.message === 'Signup already started. Please verify OTP or use resend OTP'
-      ) {
-        return sendError(res, error.message, 400);
+      // Handle specific business logic errors with proper status codes
+      const statusCode = getErrorStatusCode(error, 500);
+      const errorMessage = error.message;
+
+      // For service unavailable errors, provide a user-friendly message
+      if (errorMessage.includes('timeout') || errorMessage.includes('transaction')) {
+        return sendError(res, 'Service temporarily unavailable. Please try again.', 503);
       }
-      return next(error);
+
+      // Return the specific error message with appropriate status code
+      return sendError(res, errorMessage, statusCode);
     }
   }
 
@@ -45,16 +50,16 @@ export class AuthController {
       const result = await authService.managerLogin(data);
       return sendSuccess(res, result, 'Login successful', 200);
     } catch (error: any) {
-      if (
-        error.message === 'Invalid credentials' ||
-        error.message === 'Please verify your email with OTP before login' ||
-        error.message === 'Your account is pending approval' ||
-        error.message === 'Your account application was rejected' ||
-        error.message === 'Your account has been suspended'
-      ) {
-        return sendError(res, error.message, error.message === 'Invalid credentials' ? 401 : 403);
+      const statusCode = getErrorStatusCode(error, 500);
+      const errorMessage = error.message;
+
+      // For service unavailable errors, provide a user-friendly message
+      if (errorMessage.includes('timeout') || errorMessage.includes('transaction')) {
+        return sendError(res, 'Service temporarily unavailable. Please try again.', 503);
       }
-      return next(error);
+
+      // Return the specific error message with appropriate status code
+      return sendError(res, errorMessage, statusCode);
     }
   }
 
@@ -64,15 +69,16 @@ export class AuthController {
       const result = await authService.verifySignupOtp(data);
       return sendSuccess(res, result, 'Email verified successfully', 200);
     } catch (error: any) {
-      if (
-        error.message === 'Invalid OTP request' ||
-        error.message === 'Invalid OTP' ||
-        error.message === 'OTP has expired. Please sign up again' ||
-        error.message === 'Too many invalid OTP attempts. Please request a new OTP'
-      ) {
-        return sendError(res, error.message, 400);
+      const statusCode = getErrorStatusCode(error, 500);
+      const errorMessage = error.message;
+
+      // For service unavailable errors, provide a user-friendly message
+      if (errorMessage.includes('timeout') || errorMessage.includes('transaction')) {
+        return sendError(res, 'Service temporarily unavailable. Please try again.', 503);
       }
-      return next(error);
+
+      // Return the specific error message with appropriate status code
+      return sendError(res, errorMessage, statusCode);
     }
   }
 
@@ -98,13 +104,16 @@ export class AuthController {
       const result = await authService.staffLogin(data);
       return sendSuccess(res, result, 'Login successful', 200);
     } catch (error: any) {
-      if (
-        error.message === 'Invalid phone number or PIN' ||
-        error.message === 'Your account has been deactivated'
-      ) {
-        return sendError(res, error.message, 401);
+      const statusCode = getErrorStatusCode(error, 500);
+      const errorMessage = error.message;
+
+      // For service unavailable errors, provide a user-friendly message
+      if (errorMessage.includes('timeout') || errorMessage.includes('transaction')) {
+        return sendError(res, 'Service temporarily unavailable. Please try again.', 503);
       }
-      return next(error);
+
+      // Return the specific error message with appropriate status code
+      return sendError(res, errorMessage, statusCode);
     }
   }
 

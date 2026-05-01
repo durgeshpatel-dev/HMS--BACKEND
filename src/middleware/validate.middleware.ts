@@ -14,10 +14,16 @@ export const validate = (schema: ZodSchema) => {
     } catch (error) {
       if (error instanceof ZodError) {
         const errors = error.issues.map((err: any) => ({
-          path: err.path.join('.'),
+          field: err.path.slice(1).join('.'), // Remove 'body.' prefix for cleaner field names
           message: err.message,
+          code: err.code,
         }));
-        return sendError(res, 'Validation failed', 400, errors);
+
+        // Send the first error as the main message for better UX
+        const mainError = errors[0];
+        const message = `${mainError.field}: ${mainError.message}`;
+
+        return sendError(res, message, 400, errors);
       }
       return sendError(res, 'Validation error', 400);
     }

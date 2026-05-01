@@ -15,15 +15,12 @@ const router = Router();
 
 router.use(requireAuth);
 
-router.get('/', validate(listBillsSchema), billController.getBills);
-router.get('/order/:orderId', validate(getBillByOrderSchema), billController.getBillByOrderId);
-router.get('/:id', validate(getBillSchema), billController.getBillById);
-
+// More specific routes first
 router.post(
-  '/order/:orderId/generate',
-  requireRole(['manager', 'waiter']),
-  validate(generateBillSchema),
-  billController.generateBill
+  '/:id/share-link',
+  requireRole(['manager', 'super_admin']),
+  validate(shareBillLinkSchema),
+  billController.createShareLink
 );
 
 router.post(
@@ -34,10 +31,15 @@ router.post(
 );
 
 router.post(
-  '/:id/share-link',
-  requireRole(['manager', 'super_admin']),
-  validate(shareBillLinkSchema),
-  billController.createShareLink
+  '/order/:orderId/generate',
+  requireRole(['manager', 'waiter']),
+  validate(generateBillSchema),
+  billController.generateBill
 );
+
+// General routes after specific ones
+router.get('/', validate(listBillsSchema), billController.getBills);
+router.get('/order/:orderId', validate(getBillByOrderSchema), billController.getBillByOrderId);
+router.get('/:id', validate(getBillSchema), billController.getBillById);
 
 export default router;

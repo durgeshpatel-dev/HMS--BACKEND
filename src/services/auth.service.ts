@@ -13,6 +13,7 @@ import type {
 import crypto from 'crypto';
 import config from '../config/env';
 import emailService from './email.service';
+import { BadRequestError, NotFoundError, ForbiddenError } from '../utils/errors.util';
 
 const hashValue = (value: string) => crypto.createHash('sha256').update(value).digest('hex');
 const generateSixDigitOtp = () => `${Math.floor(100000 + Math.random() * 900000)}`;
@@ -91,9 +92,9 @@ export class AuthService {
         existingUser.otpVerification &&
         !existingUser.otpVerification.verifiedAt
       ) {
-        throw new Error('Signup already started. Please verify OTP or use resend OTP');
+        throw new BadRequestError('Signup already started. Please verify OTP or use resend OTP');
       }
-      throw new Error('Email already exists');
+      throw new BadRequestError('Email already exists');
     }
 
     // Hash password
@@ -167,7 +168,7 @@ export class AuthService {
     });
 
     if (!user || !user.otpVerification) {
-      throw new Error('Invalid OTP request');
+      throw new BadRequestError('Invalid OTP request');
     }
 
     const verification = user.otpVerification;
@@ -177,12 +178,12 @@ export class AuthService {
     }
 
     if (verification.attempts >= MAX_OTP_ATTEMPTS) {
-      throw new Error('Too many invalid OTP attempts. Please request a new OTP');
+      throw new BadRequestError('Too many invalid OTP attempts. Please request a new OTP');
     }
 
     if (verification.expiresAt.getTime() < Date.now()) {
       await this.deleteManagerUserAndMaybeRestaurant(user.id, user.restaurantId);
-      throw new Error('OTP has expired. Please sign up again');
+      throw new BadRequestError('OTP has expired. Please sign up again');
     }
 
     const isValid = hashValue(data.otp) === verification.otpHash;
@@ -191,7 +192,7 @@ export class AuthService {
         where: { userId: user.id },
         data: { attempts: { increment: 1 } },
       });
-      throw new Error('Invalid OTP');
+      throw new BadRequestError('Invalid OTP');
     }
 
     await prisma.userOtpVerification.update({
@@ -287,30 +288,30 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new Error('Invalid credentials');
+      throw new BadRequestError('Invalid credentials');
     }
 
     // Check password
     const isPasswordValid = await comparePassword(data.password, user.passwordHash);
     if (!isPasswordValid) {
-      throw new Error('Invalid credentials');
+      throw new BadRequestError('Invalid credentials');
     }
 
     if (user.otpVerification && !user.otpVerification.verifiedAt) {
-      throw new Error('Please verify your email with OTP before login');
+      throw new ForbiddenError('Please verify your email with OTP before login');
     }
 
     // Check account status
     if (user.status === 'pending_approval') {
-      throw new Error('Your account is pending approval');
+      throw new ForbiddenError('Your account is pending approval');
     }
 
     if (user.status === 'rejected') {
-      throw new Error('Your account application was rejected');
+      throw new ForbiddenError('Your account application was rejected');
     }
 
     if (user.status === 'suspended') {
-      throw new Error('Your account has been suspended');
+      throw new ForbiddenError('Your account has been suspended');
     }
 
     // Update last login
@@ -425,11 +426,11 @@ export class AuthService {
     });
 
     if (!request || request.consumedAt || request.expiresAt.getTime() < Date.now()) {
-      throw new Error('Invalid or expired reset link');
+      throw new BadRequestError('Invalid or expired reset link');
     }
 
     if (request.user.otpVerification && !request.user.otpVerification.verifiedAt) {
-      throw new Error('Please verify your email with OTP before resetting password');
+      throw new ForbiddenError('Please verify your email with OTP before resetting password');
     }
 
     const passwordHash = await hashPassword(data.newPassword);
@@ -469,18 +470,18 @@ export class AuthService {
     });
 
     if (!staff) {
-      throw new Error('Invalid phone number or PIN');
+      throw new BadRequestError('Invalid phone number or PIN');
     }
 
     // Check if staff is active
     if (!staff.isActive) {
-      throw new Error('Your account has been deactivated');
+      throw new ForbiddenError('Your account has been deactivated');
     }
 
     // Check PIN
     const isPinValid = await comparePin(data.pin, staff.pinHash);
     if (!isPinValid) {
-      throw new Error('Invalid phone number or PIN');
+      throw new BadRequestError('Invalid phone number or PIN');
     }
 
     // Update last login
@@ -535,7 +536,7 @@ export class AuthService {
         });
 
         if (!user || user.status !== 'active') {
-          throw new Error('User not found or inactive');
+          throw new ForbiddenError('User not found or inactive');
         }
 
         const newAccessToken = generateAccessToken({

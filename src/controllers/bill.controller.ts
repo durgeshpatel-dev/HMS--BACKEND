@@ -11,6 +11,16 @@ import { createBillShareToken, verifyBillShareToken } from '../utils/billShare.u
 import type { GenerateBillInput, RecordPaymentInput } from '../validators/bill.validator';
 
 class BillController {
+  constructor() {
+    this.getBills = this.getBills.bind(this);
+    this.getBillById = this.getBillById.bind(this);
+    this.getBillByOrderId = this.getBillByOrderId.bind(this);
+    this.generateBill = this.generateBill.bind(this);
+    this.recordPayment = this.recordPayment.bind(this);
+    this.createShareLink = this.createShareLink.bind(this);
+    this.downloadBillPdf = this.downloadBillPdf.bind(this);
+  }
+
   private getBaseUrl(req: Request) {
     if (config.app.publicApiUrl) return config.app.publicApiUrl.replace(/\/$/, '');
     const proto = (req.headers['x-forwarded-proto'] as string) || req.protocol;
