@@ -3,7 +3,7 @@ import config from '../config/env';
 
 export interface TokenPayload {
   userId: number;
-  userType: 'manager' | 'staff';
+  userType: 'manager' | 'staff' | 'super_admin';
   role: string;
   restaurantId: number;
   email?: string;

@@ -17,6 +17,7 @@ model Restaurant {
   email      String   @unique @db.VarChar(255)
   phone      String   @db.VarChar(20)
   address    String?  @db.Text
+  status     String   @default("active") @db.VarChar(50) // 'active', 'paused'
   settings   Json     @default("{\"currency\":\"INR\",\"tax_percentage\":5,\"operating_hours\":{},\"features\":{\"table_service\":true,\"parcel_orders\":true,\"online_orders\":false}}")
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")

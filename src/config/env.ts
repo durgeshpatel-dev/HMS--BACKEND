@@ -65,6 +65,8 @@ const config: Config = {
         'https://app.dppatel.in',
         'https://hms-app-prod.web.app',
         'https://hms-app-prod.firebaseapp.com',
+        'https://admin.dppatel.in',  // Super Admin Panel
+        'http://localhost:5174',
       ])
     ),
   },

@@ -282,6 +282,7 @@ export class AuthService {
             name: true,
             phone: true,
             address: true,
+            status: true,
           },
         },
       },
@@ -312,6 +313,11 @@ export class AuthService {
 
     if (user.status === 'suspended') {
       throw new ForbiddenError('Your account has been suspended');
+    }
+
+    // Check if restaurant is paused
+    if (user.restaurant.status === 'paused') {
+      throw new Error('Your restaurant account is currently paused. Please contact the administrator.');
     }
 
     // Update last login
@@ -464,6 +470,7 @@ export class AuthService {
           select: {
             id: true,
             name: true,
+            status: true,
           },
         },
       },
@@ -476,6 +483,11 @@ export class AuthService {
     // Check if staff is active
     if (!staff.isActive) {
       throw new ForbiddenError('Your account has been deactivated');
+    }
+
+    // Check if restaurant is paused
+    if (staff.restaurant.status === 'paused') {
+      throw new Error('Your restaurant account is currently paused. Please contact the administrator.');
     }
 
     // Check PIN
