@@ -146,6 +146,8 @@ class SuperAdminService {
             tables: true,
             categories: true,
             bills: true,
+            staff: true,
+            users: true,
           },
         },
       },
