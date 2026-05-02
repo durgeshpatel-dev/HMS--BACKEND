@@ -1,0 +1,42 @@
+name: Deploy Backend to EC2
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          timeout: 120s
+          script: |
+            set -e
+            cd /home/ubuntu/HMS--BACKEND
+
+            echo "📥 Pulling latest code..."
+            git stash 2>/dev/null || true
+            git pull origin main
+
+            echo "🔧 Generating Prisma client..."
+            npx prisma generate
+
+            echo "🏗️ Building TypeScript..."
+            npm run build
+
+            echo "🔄 Restarting PM2..."
+            pm2 restart hms-backend
+
+            echo "⏳ Waiting for startup..."
+            sleep 4
+
+            echo "✅ Verifying health..."
+            curl -sf http://localhost:5000/health | python3 -c "import sys,json; d=json.load(sys.stdin); print('Health:', d.get('message','OK'))"
+
+      - name: Notify success
+        run: echo "✅ Backend deployed to https://api.dppatel.in"
