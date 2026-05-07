@@ -15,31 +15,29 @@ const router = Router();
 
 router.use(requireAuth);
 
-// More specific routes first
+router.get('/', validate(listBillsSchema), billController.getBills);
+router.get('/order/:orderId', validate(getBillByOrderSchema), billController.getBillByOrderId);
+router.get('/:id', validate(getBillSchema), billController.getBillById);
+
+router.post(
+  '/order/:orderId/generate',
+  requireRole(['manager', 'super_admin']),
+  validate(generateBillSchema),
+  billController.generateBill
+);
+
+router.post(
+  '/:id/payment',
+  requireRole(['manager', 'super_admin']),
+  validate(recordPaymentSchema),
+  billController.recordPayment
+);
+
 router.post(
   '/:id/share-link',
   requireRole(['manager', 'super_admin']),
   validate(shareBillLinkSchema),
   billController.createShareLink
 );
-
-router.post(
-  '/:id/payment',
-  requireRole(['manager', 'waiter']),
-  validate(recordPaymentSchema),
-  billController.recordPayment
-);
-
-router.post(
-  '/order/:orderId/generate',
-  requireRole(['manager', 'waiter']),
-  validate(generateBillSchema),
-  billController.generateBill
-);
-
-// General routes after specific ones
-router.get('/', validate(listBillsSchema), billController.getBills);
-router.get('/order/:orderId', validate(getBillByOrderSchema), billController.getBillByOrderId);
-router.get('/:id', validate(getBillSchema), billController.getBillById);
 
 export default router;
