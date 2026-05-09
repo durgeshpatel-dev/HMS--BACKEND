@@ -15,6 +15,7 @@ export const updateRestaurantSettingsSchema = z.object({
     currency: z.string().min(1, 'Currency is required').optional(),
     taxPercentage: z.number().min(0).max(100).optional(),
     gstNumber: z.string().max(50).optional(),
+    printerSize: z.string().optional(),
     openingTime: z.string().optional(),
     closingTime: z.string().optional(),
     paymentMethods: z.array(z.object({
