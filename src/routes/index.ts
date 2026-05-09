@@ -9,7 +9,6 @@ import billController from '../controllers/bill.controller';
 import settingsRoutes from './settings.routes';
 import uploadRoutes from './upload.routes';
 import analyticsRoutes from './analytics.routes';
-import superadminRoutes from './superadmin.routes';
 
 const router = Router();
 
@@ -34,6 +33,5 @@ router.use('/bills', billRoutes);
 router.use('/settings', settingsRoutes);
 router.use('/upload', uploadRoutes);
 router.use('/analytics', analyticsRoutes);
-router.use('/superadmin', superadminRoutes);
 
 export default router;

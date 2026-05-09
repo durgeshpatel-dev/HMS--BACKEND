@@ -46,6 +46,7 @@ reports/
 .env.local
 .env.*.local
 !.env.example
+firebase-service-account.json
 
 # IDE
 .vscode/

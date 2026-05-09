@@ -1,6 +1,7 @@
 import prisma from '../config/database';
-import { hashPin } from '../utils/bcrypt.util';
-import type { CreateStaffInput, UpdateStaffInput } from '../validators/staff.validator';
+import { hashPin, comparePin } from '../utils/bcrypt.util';
+import type { CreateStaffInput, UpdateStaffInput, ForgotStaffPinInput, ResetStaffPinInput } from '../validators/staff.validator';
+import { verifyPhoneOtpToken } from '../utils/firebase.util';
 
 class StaffService {
   async getAllStaff(restaurantId: number, role?: string) {
@@ -31,6 +32,9 @@ class StaffService {
     if (existing) {
       throw new Error('Phone number already exists');
     }
+
+    // Verify Firebase OTP token
+    await verifyPhoneOtpToken(data.firebaseIdToken, data.phone);
 
     const pinHash = await hashPin(data.pin);
 
@@ -101,6 +105,58 @@ class StaffService {
 
     await prisma.staff.delete({ where: { id } });
     return { message: 'Staff deleted successfully' };
+  }
+
+  async forgotPin(id: number, restaurantId: number, data: ForgotStaffPinInput) {
+    const staff = await prisma.staff.findFirst({
+      where: { id, restaurantId },
+    });
+
+    if (!staff) {
+      throw new Error('Staff not found');
+    }
+
+    // Verify OTP using staff's registered phone
+    await verifyPhoneOtpToken(data.firebaseIdToken, staff.phone);
+
+    const pinHash = await hashPin(data.newPin);
+
+    return prisma.staff.update({
+      where: { id },
+      data: { pinHash },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+      },
+    });
+  }
+
+  async resetPin(id: number, restaurantId: number, data: ResetStaffPinInput) {
+    const staff = await prisma.staff.findFirst({
+      where: { id, restaurantId },
+    });
+
+    if (!staff) {
+      throw new Error('Staff not found');
+    }
+
+    const isValid = await comparePin(data.currentPin, staff.pinHash);
+    if (!isValid) {
+      throw new Error('Current PIN is incorrect');
+    }
+
+    const pinHash = await hashPin(data.newPin);
+
+    return prisma.staff.update({
+      where: { id },
+      data: { pinHash },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+      },
+    });
   }
 }
 
