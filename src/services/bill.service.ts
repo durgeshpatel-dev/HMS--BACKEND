@@ -297,21 +297,24 @@ class BillService {
     const remainingAmount = Math.max(0, Number(bill.totalAmount) - alreadyPaid);
     const amount = Number(payload.amount ?? remainingAmount);
 
-    if (amount <= 0) {
+    if (amount <= 0 && remainingAmount > 0) {
       throw new Error('Payment amount must be greater than zero');
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      const payment = await tx.payment.create({
-        data: {
-          restaurantId,
-          billId,
-          amount,
-          paymentMethod: payload.paymentMethod,
-          transactionId: payload.transactionId,
-          status: payload.status ?? 'success',
-        },
-      });
+      let payment = null;
+      if (amount > 0) {
+        payment = await tx.payment.create({
+          data: {
+            restaurantId,
+            billId,
+            amount,
+            paymentMethod: payload.paymentMethod,
+            transactionId: payload.transactionId,
+            status: payload.status ?? 'success',
+          },
+        });
+      }
 
       const successfulPayments = await tx.payment.findMany({
         where: {
@@ -334,12 +337,12 @@ class BillService {
 
       if (paymentStatus === 'paid') {
         if (bill.order.tableId) {
-          // Mark ALL billing-status orders for this table as completed
+          // Mark ALL active orders for this table as completed to guarantee the table clears
           await tx.order.updateMany({
             where: {
               tableId: bill.order.tableId,
               restaurantId: bill.restaurantId,
-              status: 'billing',
+              status: { in: ['billing', 'served', 'ready', 'preparing', 'pending', 'confirmed'] },
             },
             data: {
               status: 'completed',
