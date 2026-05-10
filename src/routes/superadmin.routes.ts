@@ -14,6 +14,7 @@ router.use(requireSuperAdmin);
 router.get('/stats', superAdminController.getPlatformStats);
 router.get('/pending-approvals', superAdminController.getPendingApprovals);
 router.get('/analytics', superAdminController.getPlatformAnalytics);
+router.put('/system-settings', superAdminController.updateSystemSettings);
 
 // Restaurant management
 router.get('/restaurants', superAdminController.getAllRestaurants);

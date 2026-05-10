@@ -27,9 +27,19 @@ class SuperAdminController {
   async getPlatformStats(req: Request, res: Response) {
     try {
       const stats = await superAdminService.getPlatformStats();
-      return sendSuccess(res, stats);
+      const systemSettings = require('../services/settings.service').settingsService.getSystemSettings();
+      return sendSuccess(res, { ...stats, systemSettings });
     } catch (error: any) {
       return sendError(res, error.message || 'Failed to fetch platform stats');
+    }
+  }
+
+  async updateSystemSettings(req: Request, res: Response) {
+    try {
+      const updated = require('../services/settings.service').settingsService.updateSystemSettings(req.body);
+      return sendSuccess(res, updated, 'System settings updated');
+    } catch (error: any) {
+      return sendError(res, error.message || 'Failed to update system settings');
     }
   }
 
