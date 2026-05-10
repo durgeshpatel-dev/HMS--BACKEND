@@ -63,6 +63,7 @@ const config: Config = {
           .filter(Boolean),
         'https://hms.dppatel.in',
         'https://app.dppatel.in',
+        'https://admin.dppatel.in',
         'https://hms-app-prod.web.app',
         'https://hms-app-prod.firebaseapp.com',
       ])
