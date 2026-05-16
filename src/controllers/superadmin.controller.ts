@@ -259,6 +259,17 @@ class SuperAdminController {
     }
   }
 
+  async deleteStaff(req: Request, res: Response) {
+    try {
+      const id = parseInt(req.params.id as string);
+      if (isNaN(id)) return sendError(res, 'Invalid staff ID', 400);
+      const result = await superAdminService.deleteStaff(id);
+      return sendSuccess(res, result, 'Staff deleted successfully');
+    } catch (error: any) {
+      return sendError(res, error.message || 'Failed to delete staff', 400);
+    }
+  }
+
   // ─── Orders ──────────────────────────────────────────────────────────
 
   async getAllOrders(req: Request, res: Response) {

@@ -38,6 +38,7 @@ router.delete('/users/:id', superAdminController.deleteUser);
 router.get('/staff', superAdminController.getAllStaff);
 router.post('/staff/:id/reset-pin', superAdminController.resetStaffPin);
 router.post('/staff/:id/toggle-active', superAdminController.toggleStaffActive);
+router.delete('/staff/:id', superAdminController.deleteStaff);
 
 // Orders
 router.get('/orders', superAdminController.getAllOrders);

@@ -358,6 +358,14 @@ class SuperAdminService {
     });
   }
 
+  async deleteStaff(id: number) {
+    const staff = await prisma.staff.findUnique({ where: { id } });
+    if (!staff) throw new Error('Staff not found');
+
+    await prisma.staff.delete({ where: { id } });
+    return { message: 'Staff member deleted successfully' };
+  }
+
   // ─── Orders Management ───────────────────────────────────────────────
 
   async getAllOrders(filters: {
