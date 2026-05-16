@@ -36,61 +36,119 @@ function buildBillPdf(res: Response, bill: any, restaurant: any, orders: any[]) 
     }
   }
 
-  // Use A4 for a premium/professional look and let PDFKit paginate as needed
-  const doc = new PDFDocument({ size: 'A4', margin: 40 });
+  const settings = restaurant?.settings || {};
+  const taxPercentage = settings.taxPercentage ?? settings.tax_percentage ?? 5;
+  const gstNumber = settings.gstNumber || settings.gst_number || '';
+  const tableOrParcel = bill?.order?.table?.tableNumber ? `Table: ${bill.order.table.tableNumber}` : 'Parcel Order';
+  const restName = restaurant?.name || 'Restaurant HMS';
+
+  // ── Dynamic page height so small orders don't have massive empty space ──
+  const itemCount = combinedItems.size;
+  const hasDiscount = Number(bill.discountAmount || 0) > 0;
+  const hasTax = Number(bill.taxAmount || 0) > 0;
+  const hasExtra = Number(bill.extraCharges || 0) > 0;
+  const totalsLines = 1 + (hasTax ? 1 : 0) + (hasDiscount ? 1 : 0) + (hasExtra ? 1 : 0);
+  // Header ~160  +  items section ~(30 per item + 60 header)  +  totals ~(25*lines + 70 grand total)  +  footer ~100  +  padding 80
+  const estimatedHeight = 160 + (itemCount * 32 + 70) + (totalsLines * 25 + 80) + 110 + 80;
+  const minHeight = 500; // never shorter than this
+  const pageHeight = Math.max(minHeight, Math.min(estimatedHeight, 841.89)); // cap at A4
+
+  const margin = 50;
+  const doc = new PDFDocument({ size: [595.28, pageHeight], margin });
 
   const fileName = `bill-${bill.billNumber || bill.id}.pdf`;
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
   doc.pipe(res);
 
-  const settings = restaurant?.settings || {};
-  const taxPercentage = settings.taxPercentage ?? settings.tax_percentage ?? 5;
-  const gstNumber = settings.gstNumber || settings.gst_number || '';
+  const pageWidth = doc.page.width - margin * 2;
+  const startX = margin;
 
-  // Layout measurements
-  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
-  const colItem = Math.round(pageWidth * 0.55);
-  const colQty = Math.round(pageWidth * 0.10);
-  const colRate = Math.round(pageWidth * 0.15);
-  const colAmount = pageWidth - (colItem + colQty + colRate);
+  // ━━━━━━━━━━━━━━━━━━━━  HEADER  ━━━━━━━━━━━━━━━━━━━━
 
-  // Header
-  doc.font('Helvetica-Bold').fontSize(20).text(restaurant?.name || 'Restaurant HMS', { align: 'left' });
-  doc.moveUp();
-  doc.font('Helvetica').fontSize(10);
-  if (restaurant?.address) doc.text(restaurant.address, { align: 'left' });
-  if (restaurant?.phone) doc.text(`Phone: ${restaurant.phone}`, { align: 'left' });
-  if (gstNumber) doc.text(`GSTIN: ${gstNumber}`, { align: 'left' });
+  // Top accent bar
+  doc.save();
+  doc.rect(0, 0, doc.page.width, 6).fill('#1a1a2e');
+  doc.restore();
 
-  // Bill meta on the right
-  const metaX = doc.page.margins.left + pageWidth - 200;
-  const metaY = doc.page.margins.top;
-  doc.font('Helvetica-Bold').fontSize(10).text(`Bill #: ${bill.billNumber || 'N/A'}`, metaX, metaY, { align: 'right' });
-  const tableOrParcel = bill?.order?.table?.tableNumber ? `Table: ${bill.order.table.tableNumber}` : 'Parcel';
-  doc.font('Helvetica').fontSize(10).text(tableOrParcel, metaX, metaY + 14, { align: 'right' });
-  doc.text(`Date: ${new Date(bill.createdAt || Date.now()).toLocaleString('en-IN')}`, metaX, metaY + 28, { align: 'right' });
+  // Restaurant name — centered, large
+  const headerY = margin + 10;
+  doc.font('Helvetica-Bold').fontSize(22).fillColor('#1a1a2e')
+    .text(restName.toUpperCase(), startX, headerY, { align: 'center', width: pageWidth });
 
-  doc.moveDown(1.5);
-  doc.lineWidth(1).dash(2, { space: 2 }).moveTo(doc.page.margins.left, doc.y).lineTo(doc.page.margins.left + pageWidth, doc.y).stroke();
-  doc.undash();
-  doc.moveDown(0.5);
-
-  // Items header
-  doc.font('Helvetica-Bold').fontSize(11);
-  const startX = doc.page.margins.left;
-  let y = doc.y;
-  doc.text('Item', startX, y, { width: colItem });
-  doc.text('Qty', startX + colItem, y, { width: colQty, align: 'center' });
-  doc.text('Rate', startX + colItem + colQty, y, { width: colRate, align: 'right' });
-  doc.text('Amount', startX + colItem + colQty + colRate, y, { width: colAmount, align: 'right' });
-
+  // Decorative line under name
   doc.moveDown(0.3);
-  doc.lineWidth(0.5).moveTo(startX, doc.y).lineTo(startX + pageWidth, doc.y).stroke();
-  doc.moveDown(0.5);
+  const decoY = doc.y;
+  const decoCenter = startX + pageWidth / 2;
+  doc.lineWidth(0.5).strokeColor('#cccccc')
+    .moveTo(decoCenter - 120, decoY).lineTo(decoCenter - 15, decoY).stroke();
+  doc.lineWidth(0.5).strokeColor('#cccccc')
+    .moveTo(decoCenter + 15, decoY).lineTo(decoCenter + 120, decoY).stroke();
+  // small diamond in center
+  doc.save();
+  doc.fillColor('#1a1a2e');
+  doc.path(`M${decoCenter},${decoY - 4} L${decoCenter + 4},${decoY} L${decoCenter},${decoY + 4} L${decoCenter - 4},${decoY} Z`).fill();
+  doc.restore();
 
-  // Items rows
-  doc.font('Helvetica').fontSize(10);
+  doc.moveDown(0.6);
+
+  // Sub-header info (address, phone, GSTIN) — centered
+  doc.font('Helvetica').fontSize(9).fillColor('#555555');
+  const subParts: string[] = [];
+  if (restaurant?.address) subParts.push(restaurant.address);
+  if (restaurant?.phone) subParts.push(`Ph: ${restaurant.phone}`);
+  if (subParts.length > 0) {
+    doc.text(subParts.join('  |  '), startX, doc.y, { align: 'center', width: pageWidth });
+  }
+  if (gstNumber) {
+    doc.text(`GSTIN: ${gstNumber}`, startX, doc.y, { align: 'center', width: pageWidth });
+  }
+
+  doc.moveDown(0.8);
+
+  // ── Bill info bar (dark background strip) ──
+  const barY = doc.y;
+  const barH = 28;
+  doc.save();
+  doc.rect(startX, barY, pageWidth, barH).fill('#1a1a2e');
+  doc.font('Helvetica-Bold').fontSize(9).fillColor('#ffffff');
+  doc.text(`Bill #: ${bill.billNumber || 'N/A'}`, startX + 12, barY + 8, { width: 200 });
+  doc.text(tableOrParcel, startX + pageWidth / 2 - 60, barY + 8, { width: 120, align: 'center' });
+  doc.text(`Date: ${new Date(bill.createdAt || Date.now()).toLocaleString('en-IN')}`, startX + pageWidth - 212, barY + 8, { width: 200, align: 'right' });
+  doc.restore();
+
+  doc.y = barY + barH + 15;
+
+  // ━━━━━━━━━━━━━━━━━━━━  ITEMS TABLE  ━━━━━━━━━━━━━━━━━━━━
+
+  // Column widths
+  const colSno = 30;
+  const colItem = Math.round((pageWidth - colSno) * 0.46);
+  const colQty = Math.round((pageWidth - colSno) * 0.12);
+  const colRate = Math.round((pageWidth - colSno) * 0.20);
+  const colAmount = pageWidth - colSno - colItem - colQty - colRate;
+
+  // Table header
+  const thY = doc.y;
+  const thH = 24;
+  doc.save();
+  doc.rect(startX, thY, pageWidth, thH).fill('#f0f0f5');
+  doc.font('Helvetica-Bold').fontSize(9).fillColor('#1a1a2e');
+  doc.text('#', startX + 6, thY + 7, { width: colSno, align: 'left' });
+  doc.text('ITEM', startX + colSno + 4, thY + 7, { width: colItem });
+  doc.text('QTY', startX + colSno + colItem, thY + 7, { width: colQty, align: 'center' });
+  doc.text('RATE', startX + colSno + colItem + colQty, thY + 7, { width: colRate, align: 'right' });
+  doc.text('AMOUNT', startX + colSno + colItem + colQty + colRate, thY + 7, { width: colAmount, align: 'right' });
+  doc.restore();
+
+  // Bottom border on header
+  doc.lineWidth(1).strokeColor('#1a1a2e')
+    .moveTo(startX, thY + thH).lineTo(startX + pageWidth, thY + thH).stroke();
+
+  doc.y = thY + thH + 2;
+
+  // Item rows
+  let rowIndex = 0;
   for (const item of combinedItems.values()) {
     const name = item.menuItem?.name || item.name || 'Item';
     const qty = Number(item.quantity || 1);
@@ -98,62 +156,108 @@ function buildBillPdf(res: Response, bill: any, restaurant: any, orders: any[]) 
     const rate = qty ? (amt / qty) : amt;
 
     // Paginate if near bottom
-    if (doc.y > doc.page.height - doc.page.margins.bottom - 120) {
+    if (doc.y > doc.page.height - doc.page.margins.bottom - 140) {
       doc.addPage();
     }
 
     const rowY = doc.y;
-    doc.text(name, startX, rowY, { width: colItem });
-    doc.text(String(qty), startX + colItem, rowY, { width: colQty, align: 'center' });
-    doc.text(`Rs ${rate.toFixed(2)}`, startX + colItem + colQty, rowY, { width: colRate, align: 'right' });
-    doc.text(`Rs ${amt.toFixed(2)}`, startX + colItem + colQty + colRate, rowY, { width: colAmount, align: 'right' });
+    const rowH = 22;
 
-    // allow wrapped name lines to increase spacing
-    const afterY = doc.y;
-    if (afterY === rowY) doc.moveDown(0.6); else doc.moveTo(startX, afterY);
+    // Alternate row shading
+    if (rowIndex % 2 === 0) {
+      doc.save();
+      doc.rect(startX, rowY, pageWidth, rowH).fill('#fafafa');
+      doc.restore();
+    }
+
+    doc.font('Helvetica').fontSize(9.5).fillColor('#333333');
+    doc.text(String(rowIndex + 1), startX + 6, rowY + 6, { width: colSno, align: 'left' });
+    doc.text(name, startX + colSno + 4, rowY + 6, { width: colItem });
+    doc.text(String(qty), startX + colSno + colItem, rowY + 6, { width: colQty, align: 'center' });
+    doc.text(`Rs ${rate.toFixed(2)}`, startX + colSno + colItem + colQty, rowY + 6, { width: colRate, align: 'right' });
+    doc.font('Helvetica-Bold').fontSize(9.5)
+      .text(`Rs ${amt.toFixed(2)}`, startX + colSno + colItem + colQty + colRate, rowY + 6, { width: colAmount, align: 'right' });
+
+    doc.y = rowY + rowH;
+    rowIndex++;
   }
 
-  doc.moveDown(0.5);
-  doc.lineWidth(0.5).moveTo(startX, doc.y).lineTo(startX + pageWidth, doc.y).stroke();
-  doc.moveDown(0.5);
+  // Bottom border of items table
+  doc.lineWidth(1).strokeColor('#1a1a2e')
+    .moveTo(startX, doc.y).lineTo(startX + pageWidth, doc.y).stroke();
 
-  // Totals (right-aligned block)
-  const rightColX = startX + colItem + colQty + colRate;
-  doc.font('Helvetica').fontSize(10);
-  doc.text('Subtotal:', rightColX - 120, doc.y, { continued: true });
-  doc.text(`Rs ${Number(bill.subtotal || 0).toFixed(2)}`, { align: 'right' });
+  doc.moveDown(0.8);
 
-  if (Number(bill.taxAmount || 0) > 0) {
-    doc.text(`Tax (${taxPercentage}%):`, rightColX - 120, doc.y, { continued: true });
-    doc.text(`Rs ${Number(bill.taxAmount).toFixed(2)}`, { align: 'right' });
+  // ━━━━━━━━━━━━━━━━━━━━  TOTALS  ━━━━━━━━━━━━━━━━━━━━
+
+  const labelW = 130;
+  const valW = 110;
+  const totalsX = startX + pageWidth - labelW - valW - 10;
+
+  const drawTotalRow = (label: string, value: string, bold = false) => {
+    const rowY = doc.y;
+    doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(10).fillColor('#444444');
+    doc.text(label, totalsX, rowY, { width: labelW, align: 'right' });
+    doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(10).fillColor('#1a1a2e');
+    doc.text(value, totalsX + labelW + 10, rowY, { width: valW, align: 'right' });
+    doc.moveDown(0.35);
+  };
+
+  drawTotalRow('Subtotal', `Rs ${Number(bill.subtotal || 0).toFixed(2)}`);
+
+  if (hasTax) {
+    drawTotalRow(`Tax (${taxPercentage}%)`, `Rs ${Number(bill.taxAmount).toFixed(2)}`);
   }
-
-  if (Number(bill.discountAmount || 0) > 0) {
+  if (hasDiscount) {
     const dPct = bill.discountPercentage ? ` (${Number(bill.discountPercentage).toFixed(1)}%)` : '';
-    doc.text(`Discount${dPct}:`, rightColX - 120, doc.y, { continued: true });
-    doc.text(`-Rs ${Number(bill.discountAmount).toFixed(2)}`, { align: 'right' });
+    drawTotalRow(`Discount${dPct}`, `- Rs ${Number(bill.discountAmount).toFixed(2)}`);
+  }
+  if (hasExtra) {
+    drawTotalRow('Extra Charges', `Rs ${Number(bill.extraCharges).toFixed(2)}`);
   }
 
-  if (Number(bill.extraCharges || 0) > 0) {
-    doc.text('Extra Charges:', rightColX - 120, doc.y, { continued: true });
-    doc.text(`Rs ${Number(bill.extraCharges).toFixed(2)}`, { align: 'right' });
+  doc.moveDown(0.3);
+
+  // ── Grand Total box ──
+  const gtY = doc.y;
+  const gtH = 34;
+  const gtX = totalsX - 10;
+  const gtW = labelW + valW + 30;
+  doc.save();
+  doc.roundedRect(gtX, gtY, gtW, gtH, 4).fill('#1a1a2e');
+  doc.font('Helvetica-Bold').fontSize(13).fillColor('#ffffff');
+  doc.text('GRAND TOTAL', gtX + 12, gtY + 9, { width: gtW / 2 - 12 });
+  doc.text(`Rs ${Number(bill.totalAmount || 0).toFixed(2)}`, gtX + gtW / 2, gtY + 9, { width: gtW / 2 - 12, align: 'right' });
+  doc.restore();
+
+  doc.y = gtY + gtH + 20;
+
+  // ━━━━━━━━━━━━━━━━━━━━  FOOTER  ━━━━━━━━━━━━━━━━━━━━
+
+  // Thin separator
+  doc.lineWidth(0.5).strokeColor('#dddddd')
+    .moveTo(startX + pageWidth * 0.25, doc.y).lineTo(startX + pageWidth * 0.75, doc.y).stroke();
+  doc.moveDown(0.7);
+
+  doc.font('Helvetica-Bold').fontSize(11).fillColor('#1a1a2e')
+    .text('Thank You for Dining with Us!', startX, doc.y, { align: 'center', width: pageWidth });
+  doc.moveDown(0.3);
+  doc.font('Helvetica').fontSize(8).fillColor('#999999')
+    .text('We appreciate your visit. See you again soon!', startX, doc.y, { align: 'center', width: pageWidth });
+
+  if (restaurant?.website || restaurant?.email) {
+    doc.moveDown(0.3);
+    const contactParts: string[] = [];
+    if (restaurant.website) contactParts.push(restaurant.website);
+    if (restaurant.email) contactParts.push(restaurant.email);
+    doc.font('Helvetica').fontSize(8).fillColor('#999999')
+      .text(contactParts.join('  •  '), startX, doc.y, { align: 'center', width: pageWidth });
   }
 
-  doc.moveDown(0.5);
-  doc.lineWidth(0.8).moveTo(startX, doc.y).lineTo(startX + pageWidth, doc.y).stroke();
-  doc.moveDown(0.5);
-
-  // Grand Total emphasized
-  doc.font('Helvetica-Bold').fontSize(14);
-  doc.text('GRAND TOTAL', startX, doc.y, { continued: true });
-  doc.text(`Rs ${Number(bill.totalAmount || 0).toFixed(2)}`, { align: 'right' });
-
-  doc.moveDown(1);
-
-  // Footer
-  doc.font('Helvetica').fontSize(10).text('*** Thank You for Dining with Us ***', { align: 'center' });
-  if (restaurant?.website) doc.text(restaurant.website, { align: 'center' });
-  if (restaurant?.email) doc.text(restaurant.email, { align: 'center' });
+  // Bottom accent bar
+  doc.save();
+  doc.rect(0, doc.page.height - 6, doc.page.width, 6).fill('#1a1a2e');
+  doc.restore();
 
   doc.end();
 }
