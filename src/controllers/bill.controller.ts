@@ -19,34 +19,8 @@ function getBaseUrl(req: Request) {
 }
 
 function buildBillPdf(res: Response, bill: any, restaurant: any, orders: any[]) {
-  const doc = new PDFDocument({ size: 'A4', margin: 40 });
-  const fileName = `bill-${bill.billNumber || bill.id}.pdf`;
-
-  res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-
-  doc.pipe(res);
-
-  const settings = restaurant?.settings || {};
-  const taxPercentage = settings.taxPercentage ?? settings.tax_percentage ?? 5;
-  const gstNumber = settings.gstNumber || settings.gst_number || '';
-
-  doc.fontSize(18).text(restaurant?.name || 'Restaurant HMS', { align: 'center' });
-  if (restaurant?.address) doc.fontSize(10).text(restaurant.address, { align: 'center' });
-  if (restaurant?.phone) doc.fontSize(10).text(restaurant.phone, { align: 'center' });
-  if (gstNumber) doc.fontSize(10).text(`GSTIN: ${gstNumber}`, { align: 'center' });
-
-  doc.moveDown();
-  doc.fontSize(12).text(`Bill #: ${bill.billNumber || 'N/A'}`);
-  if (bill?.order?.table?.tableNumber) {
-    doc.text(`Table: ${bill.order.table.tableNumber}`);
-  }
-  doc.text(`Date: ${new Date(bill.createdAt || Date.now()).toLocaleString('en-IN')}`);
-
-  doc.moveDown();
-  doc.fontSize(12).text('Items', { underline: true });
-
   const combinedItems = new Map<string, any>();
+  let itemCount = 0;
   for (const order of orders) {
     for (const item of order.items || []) {
       const key = String(item.menuItem?.id || item.menuItemId || item.id);
@@ -59,30 +33,131 @@ function buildBillPdf(res: Response, bill: any, restaurant: any, orders: any[]) 
         });
       } else {
         combinedItems.set(key, { ...item });
+        itemCount++;
       }
     }
   }
 
+  // Calculate dynamic height based on items to avoid huge blank space
+  // Base height (header, info, totals, footer, margins) is approx 350
+  // Each item takes about 30 points
+  const calculatedHeight = Math.max(450, 380 + (itemCount * 35));
+  
+  // Create a narrow, phone-friendly "receipt" size (e.g. 300px wide)
+  const doc = new PDFDocument({ 
+    size: [300, calculatedHeight], 
+    margin: 20 
+  });
+  
+  const fileName = `bill-${bill.billNumber || bill.id}.pdf`;
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
+
+  doc.pipe(res);
+
+  const settings = restaurant?.settings || {};
+  const taxPercentage = settings.taxPercentage ?? settings.tax_percentage ?? 5;
+  const gstNumber = settings.gstNumber || settings.gst_number || '';
+
+  // Header
+  doc.font('Helvetica-Bold').fontSize(16).text(restaurant?.name || 'Restaurant HMS', { align: 'center' });
+  doc.font('Helvetica');
+  if (restaurant?.address) doc.fontSize(10).text(restaurant.address, { align: 'center' });
+  if (restaurant?.phone) doc.fontSize(10).text(restaurant.phone, { align: 'center' });
+  if (gstNumber) doc.fontSize(10).text(`GSTIN: ${gstNumber}`, { align: 'center' });
+
+  doc.moveDown(1);
+  
+  // Divider
+  doc.lineWidth(1).dash(3, { space: 3 }).moveTo(20, doc.y).lineTo(280, doc.y).stroke();
+  doc.moveDown(0.5);
+
+  // Info
+  doc.fontSize(10).text(`Bill #: ${bill.billNumber || 'N/A'}`, { continued: true });
+  if (bill?.order?.table?.tableNumber) {
+    doc.text(` | Table: ${bill.order.table.tableNumber}`, { align: 'right' });
+  } else {
+    doc.text(` | Parcel`, { align: 'right' });
+  }
+  doc.text(`Date: ${new Date(bill.createdAt || Date.now()).toLocaleString('en-IN')}`);
+
+  doc.moveDown(0.5);
+  doc.lineWidth(1).dash(3, { space: 3 }).moveTo(20, doc.y).lineTo(280, doc.y).stroke();
+  doc.moveDown(0.5);
+
+  // Items Header
+  doc.font('Helvetica-Bold').fontSize(10);
+  doc.text('Item', 20, doc.y, { continued: true, width: 140 });
+  doc.text('Qty', 160, doc.y, { continued: true, width: 40, align: 'center' });
+  doc.text('Amount', 200, doc.y, { width: 80, align: 'right' });
+  
+  doc.moveDown(0.5);
+  doc.lineWidth(1).undash().moveTo(20, doc.y).lineTo(280, doc.y).stroke();
+  doc.moveDown(0.5);
+
+  // Items
+  doc.font('Helvetica').fontSize(10);
   for (const item of combinedItems.values()) {
     const name = item.menuItem?.name || 'Item';
-    doc.fontSize(10).text(`${name}  x${item.quantity}  ₹${Number(item.subtotal).toFixed(2)}`);
+    const startY = doc.y;
+    
+    // Draw Name (can wrap to next line)
+    doc.text(name, 20, startY, { width: 140 });
+    const endY = doc.y;
+    
+    // Draw Qty and Amount on the same startY
+    doc.text(`x${item.quantity}`, 160, startY, { width: 40, align: 'center' });
+    doc.text(`Rs ${Number(item.subtotal).toFixed(2)}`, 200, startY, { width: 80, align: 'right' });
+    
+    doc.y = endY; // Move Y to below the wrapped text
+    doc.moveDown(0.2);
   }
 
-  doc.moveDown();
-  doc.fontSize(12).text('Totals', { underline: true });
-  doc.fontSize(10).text(`Subtotal: ₹${Number(bill.subtotal || 0).toFixed(2)}`);
-  doc.fontSize(10).text(`Tax (${taxPercentage}%): ₹${Number(bill.taxAmount || 0).toFixed(2)}`);
+  doc.moveDown(0.5);
+  doc.lineWidth(1).dash(3, { space: 3 }).moveTo(20, doc.y).lineTo(280, doc.y).stroke();
+  doc.moveDown(0.5);
+
+  // Totals
+  const currentY = doc.y;
+  doc.font('Helvetica').fontSize(10);
+  
+  doc.text('Subtotal:', 20, doc.y, { continued: true });
+  doc.text(`Rs ${Number(bill.subtotal || 0).toFixed(2)}`, { align: 'right' });
+
+  if (Number(bill.taxAmount || 0) > 0) {
+    doc.text(`Tax (${taxPercentage}%):`, 20, doc.y, { continued: true });
+    doc.text(`Rs ${Number(bill.taxAmount).toFixed(2)}`, { align: 'right' });
+  }
+  
   if (Number(bill.discountAmount || 0) > 0) {
-    doc.text(`Discount: -₹${Number(bill.discountAmount).toFixed(2)}`);
+    const dPct = bill.discountPercentage ? ` (${Number(bill.discountPercentage).toFixed(1)}%)` : '';
+    doc.text(`Discount${dPct}:`, 20, doc.y, { continued: true });
+    doc.text(`-Rs ${Number(bill.discountAmount).toFixed(2)}`, { align: 'right' });
   }
+  
   if (Number(bill.extraCharges || 0) > 0) {
-    doc.text(`Extra Charges: ₹${Number(bill.extraCharges).toFixed(2)}`);
+    doc.text('Extra Charges:', 20, doc.y, { continued: true });
+    doc.text(`Rs ${Number(bill.extraCharges).toFixed(2)}`, { align: 'right' });
   }
-  doc.fontSize(12).text(`Grand Total: ₹${Number(bill.totalAmount || 0).toFixed(2)}`);
 
-  doc.moveDown();
-  doc.fontSize(10).text('*** Thank You for Visiting ***', { align: 'center' });
-  doc.fontSize(10).text('Please Come Again!', { align: 'center' });
+  doc.moveDown(0.5);
+  doc.lineWidth(1).undash().moveTo(20, doc.y).lineTo(280, doc.y).stroke();
+  doc.moveDown(0.5);
+
+  // Grand Total
+  doc.font('Helvetica-Bold').fontSize(14);
+  doc.text('GRAND TOTAL:', 20, doc.y, { continued: true });
+  doc.text(`Rs ${Number(bill.totalAmount || 0).toFixed(2)}`, { align: 'right' });
+
+  doc.moveDown(1);
+  doc.lineWidth(1).dash(3, { space: 3 }).moveTo(20, doc.y).lineTo(280, doc.y).stroke();
+  doc.moveDown(1);
+
+  // Footer
+  doc.font('Helvetica').fontSize(10);
+  doc.text('*** Thank You for Visiting ***', { align: 'center' });
+  doc.text('Please Come Again!', { align: 'center' });
 
   doc.end();
 }
