@@ -20,7 +20,6 @@ function getBaseUrl(req: Request) {
 
 function buildBillPdf(res: Response, bill: any, restaurant: any, orders: any[]) {
   const combinedItems = new Map<string, any>();
-  let itemCount = 0;
   for (const order of orders) {
     for (const item of order.items || []) {
       const key = String(item.menuItem?.id || item.menuItemId || item.id);
@@ -33,131 +32,128 @@ function buildBillPdf(res: Response, bill: any, restaurant: any, orders: any[]) 
         });
       } else {
         combinedItems.set(key, { ...item });
-        itemCount++;
       }
     }
   }
 
-  // Calculate dynamic height based on items to avoid huge blank space
-  // Base height (header, info, totals, footer, margins) is approx 350
-  // Each item takes about 30 points
-  const calculatedHeight = Math.max(450, 380 + (itemCount * 35));
-  
-  // Create a narrow, phone-friendly "receipt" size (e.g. 300px wide)
-  const doc = new PDFDocument({ 
-    size: [300, calculatedHeight], 
-    margin: 20 
-  });
-  
-  const fileName = `bill-${bill.billNumber || bill.id}.pdf`;
+  // Use A4 for a premium/professional look and let PDFKit paginate as needed
+  const doc = new PDFDocument({ size: 'A4', margin: 40 });
 
+  const fileName = `bill-${bill.billNumber || bill.id}.pdf`;
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
-
   doc.pipe(res);
 
   const settings = restaurant?.settings || {};
   const taxPercentage = settings.taxPercentage ?? settings.tax_percentage ?? 5;
   const gstNumber = settings.gstNumber || settings.gst_number || '';
 
+  // Layout measurements
+  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const colItem = Math.round(pageWidth * 0.55);
+  const colQty = Math.round(pageWidth * 0.10);
+  const colRate = Math.round(pageWidth * 0.15);
+  const colAmount = pageWidth - (colItem + colQty + colRate);
+
   // Header
-  doc.font('Helvetica-Bold').fontSize(16).text(restaurant?.name || 'Restaurant HMS', { align: 'center' });
-  doc.font('Helvetica');
-  if (restaurant?.address) doc.fontSize(10).text(restaurant.address, { align: 'center' });
-  if (restaurant?.phone) doc.fontSize(10).text(restaurant.phone, { align: 'center' });
-  if (gstNumber) doc.fontSize(10).text(`GSTIN: ${gstNumber}`, { align: 'center' });
+  doc.font('Helvetica-Bold').fontSize(20).text(restaurant?.name || 'Restaurant HMS', { align: 'left' });
+  doc.moveUp();
+  doc.font('Helvetica').fontSize(10);
+  if (restaurant?.address) doc.text(restaurant.address, { align: 'left' });
+  if (restaurant?.phone) doc.text(`Phone: ${restaurant.phone}`, { align: 'left' });
+  if (gstNumber) doc.text(`GSTIN: ${gstNumber}`, { align: 'left' });
 
-  doc.moveDown(1);
-  
-  // Divider
-  doc.lineWidth(1).dash(3, { space: 3 }).moveTo(20, doc.y).lineTo(280, doc.y).stroke();
+  // Bill meta on the right
+  const metaX = doc.page.margins.left + pageWidth - 200;
+  const metaY = doc.page.margins.top;
+  doc.font('Helvetica-Bold').fontSize(10).text(`Bill #: ${bill.billNumber || 'N/A'}`, metaX, metaY, { align: 'right' });
+  const tableOrParcel = bill?.order?.table?.tableNumber ? `Table: ${bill.order.table.tableNumber}` : 'Parcel';
+  doc.font('Helvetica').fontSize(10).text(tableOrParcel, metaX, metaY + 14, { align: 'right' });
+  doc.text(`Date: ${new Date(bill.createdAt || Date.now()).toLocaleString('en-IN')}`, metaX, metaY + 28, { align: 'right' });
+
+  doc.moveDown(1.5);
+  doc.lineWidth(1).dash(2, { space: 2 }).moveTo(doc.page.margins.left, doc.y).lineTo(doc.page.margins.left + pageWidth, doc.y).stroke();
+  doc.undash();
   doc.moveDown(0.5);
 
-  // Info
-  doc.fontSize(10).text(`Bill #: ${bill.billNumber || 'N/A'}`, { continued: true });
-  if (bill?.order?.table?.tableNumber) {
-    doc.text(` | Table: ${bill.order.table.tableNumber}`, { align: 'right' });
-  } else {
-    doc.text(` | Parcel`, { align: 'right' });
-  }
-  doc.text(`Date: ${new Date(bill.createdAt || Date.now()).toLocaleString('en-IN')}`);
+  // Items header
+  doc.font('Helvetica-Bold').fontSize(11);
+  const startX = doc.page.margins.left;
+  let y = doc.y;
+  doc.text('Item', startX, y, { width: colItem });
+  doc.text('Qty', startX + colItem, y, { width: colQty, align: 'center' });
+  doc.text('Rate', startX + colItem + colQty, y, { width: colRate, align: 'right' });
+  doc.text('Amount', startX + colItem + colQty + colRate, y, { width: colAmount, align: 'right' });
 
-  doc.moveDown(0.5);
-  doc.lineWidth(1).dash(3, { space: 3 }).moveTo(20, doc.y).lineTo(280, doc.y).stroke();
-  doc.moveDown(0.5);
-
-  // Items Header
-  doc.font('Helvetica-Bold').fontSize(10);
-  doc.text('Item', 20, doc.y, { continued: true, width: 140 });
-  doc.text('Qty', 160, doc.y, { continued: true, width: 40, align: 'center' });
-  doc.text('Amount', 200, doc.y, { width: 80, align: 'right' });
-  
-  doc.moveDown(0.5);
-  doc.lineWidth(1).undash().moveTo(20, doc.y).lineTo(280, doc.y).stroke();
+  doc.moveDown(0.3);
+  doc.lineWidth(0.5).moveTo(startX, doc.y).lineTo(startX + pageWidth, doc.y).stroke();
   doc.moveDown(0.5);
 
-  // Items
+  // Items rows
   doc.font('Helvetica').fontSize(10);
   for (const item of combinedItems.values()) {
-    const name = item.menuItem?.name || 'Item';
-    const startY = doc.y;
-    
-    // Draw Name (can wrap to next line)
-    doc.text(name, 20, startY, { width: 140 });
-    const endY = doc.y;
-    
-    // Draw Qty and Amount on the same startY
-    doc.text(`x${item.quantity}`, 160, startY, { width: 40, align: 'center' });
-    doc.text(`Rs ${Number(item.subtotal).toFixed(2)}`, 200, startY, { width: 80, align: 'right' });
-    
-    doc.y = endY; // Move Y to below the wrapped text
-    doc.moveDown(0.2);
+    const name = item.menuItem?.name || item.name || 'Item';
+    const qty = Number(item.quantity || 1);
+    const amt = Number(item.subtotal || 0);
+    const rate = qty ? (amt / qty) : amt;
+
+    // Paginate if near bottom
+    if (doc.y > doc.page.height - doc.page.margins.bottom - 120) {
+      doc.addPage();
+    }
+
+    const rowY = doc.y;
+    doc.text(name, startX, rowY, { width: colItem });
+    doc.text(String(qty), startX + colItem, rowY, { width: colQty, align: 'center' });
+    doc.text(`Rs ${rate.toFixed(2)}`, startX + colItem + colQty, rowY, { width: colRate, align: 'right' });
+    doc.text(`Rs ${amt.toFixed(2)}`, startX + colItem + colQty + colRate, rowY, { width: colAmount, align: 'right' });
+
+    // allow wrapped name lines to increase spacing
+    const afterY = doc.y;
+    if (afterY === rowY) doc.moveDown(0.6); else doc.moveTo(startX, afterY);
   }
 
   doc.moveDown(0.5);
-  doc.lineWidth(1).dash(3, { space: 3 }).moveTo(20, doc.y).lineTo(280, doc.y).stroke();
+  doc.lineWidth(0.5).moveTo(startX, doc.y).lineTo(startX + pageWidth, doc.y).stroke();
   doc.moveDown(0.5);
 
-  // Totals
-  const currentY = doc.y;
+  // Totals (right-aligned block)
+  const rightColX = startX + colItem + colQty + colRate;
   doc.font('Helvetica').fontSize(10);
-  
-  doc.text('Subtotal:', 20, doc.y, { continued: true });
+  doc.text('Subtotal:', rightColX - 120, doc.y, { continued: true });
   doc.text(`Rs ${Number(bill.subtotal || 0).toFixed(2)}`, { align: 'right' });
 
   if (Number(bill.taxAmount || 0) > 0) {
-    doc.text(`Tax (${taxPercentage}%):`, 20, doc.y, { continued: true });
+    doc.text(`Tax (${taxPercentage}%):`, rightColX - 120, doc.y, { continued: true });
     doc.text(`Rs ${Number(bill.taxAmount).toFixed(2)}`, { align: 'right' });
   }
-  
+
   if (Number(bill.discountAmount || 0) > 0) {
     const dPct = bill.discountPercentage ? ` (${Number(bill.discountPercentage).toFixed(1)}%)` : '';
-    doc.text(`Discount${dPct}:`, 20, doc.y, { continued: true });
+    doc.text(`Discount${dPct}:`, rightColX - 120, doc.y, { continued: true });
     doc.text(`-Rs ${Number(bill.discountAmount).toFixed(2)}`, { align: 'right' });
   }
-  
+
   if (Number(bill.extraCharges || 0) > 0) {
-    doc.text('Extra Charges:', 20, doc.y, { continued: true });
+    doc.text('Extra Charges:', rightColX - 120, doc.y, { continued: true });
     doc.text(`Rs ${Number(bill.extraCharges).toFixed(2)}`, { align: 'right' });
   }
 
   doc.moveDown(0.5);
-  doc.lineWidth(1).undash().moveTo(20, doc.y).lineTo(280, doc.y).stroke();
+  doc.lineWidth(0.8).moveTo(startX, doc.y).lineTo(startX + pageWidth, doc.y).stroke();
   doc.moveDown(0.5);
 
-  // Grand Total
+  // Grand Total emphasized
   doc.font('Helvetica-Bold').fontSize(14);
-  doc.text('GRAND TOTAL:', 20, doc.y, { continued: true });
+  doc.text('GRAND TOTAL', startX, doc.y, { continued: true });
   doc.text(`Rs ${Number(bill.totalAmount || 0).toFixed(2)}`, { align: 'right' });
 
   doc.moveDown(1);
-  doc.lineWidth(1).dash(3, { space: 3 }).moveTo(20, doc.y).lineTo(280, doc.y).stroke();
-  doc.moveDown(1);
 
   // Footer
-  doc.font('Helvetica').fontSize(10);
-  doc.text('*** Thank You for Visiting ***', { align: 'center' });
-  doc.text('Please Come Again!', { align: 'center' });
+  doc.font('Helvetica').fontSize(10).text('*** Thank You for Dining with Us ***', { align: 'center' });
+  if (restaurant?.website) doc.text(restaurant.website, { align: 'center' });
+  if (restaurant?.email) doc.text(restaurant.email, { align: 'center' });
 
   doc.end();
 }
