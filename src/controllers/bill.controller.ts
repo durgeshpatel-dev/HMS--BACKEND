@@ -262,6 +262,125 @@ function buildBillPdf(res: Response, bill: any, restaurant: any, orders: any[]) 
   doc.end();
 }
 
+function buildBillViewerHtml(restName: string, billNumber: string, fileName: string, pdfUrl: string): string {
+  // Escape strings for safe HTML embedding
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+  <title>Bill ${esc(billNumber)} | ${esc(restName)}</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f5f5f5;color:#333;min-height:100vh;display:flex;flex-direction:column}
+    .header{background:#1a1a2e;color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+    .header h1{font-size:16px;font-weight:600;letter-spacing:0.5px}
+    .header .bill-num{font-size:12px;opacity:0.8;margin-top:2px}
+    .dl-btn{background:#fff;color:#1a1a2e;border:none;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px;transition:all 0.2s;text-decoration:none}
+    .dl-btn:hover{background:#e8e8ff;transform:translateY(-1px)}
+    .dl-btn:active{transform:translateY(0)}
+    .dl-btn svg{width:18px;height:18px}
+    .viewer{flex:1;display:flex;flex-direction:column;padding:0;min-height:0}
+    .viewer embed,.viewer iframe,.viewer object{width:100%;flex:1;border:none;min-height:75vh}
+    .fallback{padding:40px 20px;text-align:center;display:none}
+    .fallback p{margin-bottom:16px;color:#666;font-size:15px}
+    .fallback .dl-btn{display:inline-flex;margin:0 auto}
+    .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a1a2e;color:#fff;padding:12px 24px;border-radius:12px;font-size:14px;font-weight:500;box-shadow:0 4px 20px rgba(0,0,0,0.3);opacity:0;transition:opacity 0.4s;z-index:100;pointer-events:none;display:flex;align-items:center;gap:8px}
+    .toast.show{opacity:1}
+    .toast svg{width:18px;height:18px;flex-shrink:0}
+    @media(max-width:480px){
+      .header{padding:12px 16px}
+      .header h1{font-size:14px}
+      .dl-btn{padding:8px 14px;font-size:13px}
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>${esc(restName)}</h1>
+      <div class="bill-num">Bill #${esc(billNumber)}</div>
+    </div>
+    <a id="manualDl" class="dl-btn" href="${esc(pdfUrl)}" download="${esc(fileName)}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Download
+    </a>
+  </div>
+
+  <div class="viewer" id="viewer">
+    <object data="${esc(pdfUrl)}" type="application/pdf" id="pdfObject">
+      <iframe src="${esc(pdfUrl)}" id="pdfIframe"></iframe>
+    </object>
+  </div>
+
+  <div class="fallback" id="fallback">
+    <p>Could not preview the bill. Tap below to download.</p>
+    <a class="dl-btn" href="${esc(pdfUrl)}" download="${esc(fileName)}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Download Bill PDF
+    </a>
+  </div>
+
+  <div class="toast" id="toast">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+    <span id="toastMsg">Bill saved!</span>
+  </div>
+
+  <script>
+    (function(){
+      var pdfUrl = "${pdfUrl.replace(/"/g, '\\"')}";
+      var fileName = "${fileName.replace(/"/g, '\\"')}";
+
+      function showToast(msg) {
+        var t = document.getElementById('toast');
+        document.getElementById('toastMsg').textContent = msg;
+        t.classList.add('show');
+        setTimeout(function(){ t.classList.remove('show'); }, 3000);
+      }
+
+      function triggerDownload() {
+        fetch(pdfUrl)
+          .then(function(r) {
+            if (!r.ok) throw new Error('fetch failed');
+            return r.blob();
+          })
+          .then(function(blob) {
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(function() {
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+            }, 200);
+            showToast('Bill saved to your device!');
+          })
+          .catch(function() {
+            // Fallback: direct link click
+            var a = document.getElementById('manualDl');
+            if (a) a.click();
+          });
+      }
+
+      // Auto-download after short delay (gives browser time to render the PDF)
+      setTimeout(triggerDownload, 1200);
+
+      // Also attach download to the manual button using blob method
+      document.getElementById('manualDl').addEventListener('click', function(e) {
+        e.preventDefault();
+        triggerDownload();
+      });
+    })();
+  </script>
+</body>
+</html>`;
+}
+
 class BillController {
 
   // buildBillPdf and getBaseUrl moved to module-level standalone functions above
@@ -384,7 +503,7 @@ class BillController {
       const bill = await billService.getBillById(billId, payload.restaurantId);
       const restaurant = await prisma.restaurant.findUnique({
         where: { id: payload.restaurantId },
-        select: { name: true, phone: true, address: true, settings: true },
+        select: { name: true, phone: true, address: true, settings: true, email: true },
       });
 
       const consolidatedOrders = (bill as any).consolidatedOrders || [];
@@ -402,7 +521,20 @@ class BillController {
         });
       }
 
-      buildBillPdf(res, bill, restaurant, orders);
+      // If raw=1, serve the actual PDF binary (used by the viewer page)
+      if (req.query.raw === '1') {
+        return buildBillPdf(res, bill, restaurant, orders);
+      }
+
+      // Default: serve an HTML viewer that shows the PDF AND auto-downloads it
+      const restName = restaurant?.name || 'Restaurant';
+      const billNumber = bill.billNumber || String(bill.id);
+      const fileName = `bill-${billNumber}.pdf`;
+      const baseUrl = getBaseUrl(req);
+      const pdfUrl = `${baseUrl}/api/v1/bills/${billId}/download?token=${encodeURIComponent(token)}&raw=1`;
+
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.send(buildBillViewerHtml(restName, billNumber, fileName, pdfUrl));
     } catch (error: any) {
       return sendError(res, error.message, getErrorStatusCode(error, 500));
     }
